@@ -1,0 +1,28 @@
+[
+  {
+    "PdV[Cod PdV]": "6716601537",
+    "PdV[Ragione Sociale PdV]": "MOTO CLUB UMBRIA",
+    "PdV[Cod BU]": "BU01",
+    "Forza di Vendita[Responsabile Commerciale]": "STIVANELLO",
+    "Forza di Vendita[Responsabile Vendite]": "PERUZZI",
+    "Forza di Vendita[Venditore]": "EUPIZI",
+    "EmailResponsabileCommerciale": "stivanello@azienda.it",
+    "EmailResponsabileVendite": "peruzzi@azienda.it",
+    "SearchKey": "6716601537 | MOTO CLUB UMBRIA",
+    "CheckRSM": "OK",
+    "CheckRV": "OK"
+  },
+  {
+    "PdV[Cod PdV]": "6716601538",
+    "PdV[Ragione Sociale PdV]": "BAR CENTRALE TERNI",
+    "PdV[Cod BU]": "BU01",
+    "Forza di Vendita[Responsabile Commerciale]": "STIVANELLO",
+    "Forza di Vendita[Responsabile Vendite]": "PERUZZI",
+    "Forza di Vendita[Venditore]": "MARIANI",
+    "EmailResponsabileCommerciale": "stivanello@azienda.it",
+    "EmailResponsabileVendite": "peruzzi@azienda.it",
+    "SearchKey": "6716601538 | BAR CENTRALE TERNI",
+    "CheckRSM": "OK",
+    "CheckRV": "OK"
+  }
+]
