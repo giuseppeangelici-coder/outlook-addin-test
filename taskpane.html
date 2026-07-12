@@ -74,7 +74,9 @@
   <div id="log">Log eventi...</div>
 
   <script>
-    // LISTA UTENTI MASTER PER RLS
+    // ----------------------------------------------------------------
+    // HARD-CODING UTENTI MASTER PER I TEST (RLS)
+    // ----------------------------------------------------------------
     const MASTER_USERS = [
       "g.angelici@partesa.it"
     ];
@@ -125,16 +127,30 @@
 
       // 3. LOGICA ROW-LEVEL SECURITY (RLS)
       function applyRowLevelSecurity(email) {
-        if (MASTER_USERS.map(e => e.toLowerCase()).includes(email)) {
+        const isMaster = MASTER_USERS.map(e => e.toLowerCase()).includes(email);
+        
+        if (isMaster) {
           filteredDatabase = fullDatabase;
           log("Profilo: MASTER DETECTED. Visibilità completa (" + filteredDatabase.length + " record).");
         } 
-        else if (fullDatabase.some(c => c.emailResponsabileVendite && c.emailResponsabileVendite.toLowerCase() === email)) {
-          filteredDatabase = fullDatabase.filter(c => c.emailResponsabileVendite && c.emailResponsabileVendite.toLowerCase() === email);
+        else if (fullDatabase.some(c => {
+          const ev = c.emailResponsabileVendite || c.EmailResponsabileVendite || "";
+          return ev.toLowerCase() === email;
+        })) {
+          filteredDatabase = fullDatabase.filter(c => {
+            const ev = c.emailResponsabileVendite || c.EmailResponsabileVendite || "";
+            return ev.toLowerCase() === email;
+          });
           log("Profilo: RV DETECTED. Record associati: " + filteredDatabase.length);
         } 
-        else if (fullDatabase.some(c => c.emailResponsabileCommerciale && c.emailResponsabileCommerciale.toLowerCase() === email)) {
-          filteredDatabase = fullDatabase.filter(c => c.emailResponsabileCommerciale && c.emailResponsabileCommerciale.toLowerCase() === email);
+        else if (fullDatabase.some(c => {
+          const ec = c.emailResponsabileCommerciale || c.EmailResponsabileCommerciale || "";
+          return ec.toLowerCase() === email;
+        })) {
+          filteredDatabase = fullDatabase.filter(c => {
+            const ec = c.emailResponsabileCommerciale || c.EmailResponsabileCommerciale || "";
+            return ec.toLowerCase() === email;
+          });
           log("Profilo: RSM DETECTED. Record associati all'area: " + filteredDatabase.length);
         } 
         else {
@@ -150,7 +166,7 @@
         }
       }
 
-     // 4. AUTOCOMPLETE (CORRETTO PER KEY CASE-SENSITIVE)
+      // 4. AUTOCOMPLETE TOLERANT (CASE-INSENSITIVE SULLE CHIAVI)
       const searchInput = document.getElementById("searchCliente");
       const suggestionsList = document.getElementById("suggestions");
 
@@ -162,7 +178,6 @@
         if (query.length < 2) return;
 
         const filtered = filteredDatabase.filter(c => {
-          // Controlla sia searchKey che SearchKey per evitare errori di maiuscole nel JSON
           const chiaveRicerca = c.searchKey || c.SearchKey || "";
           return chiaveRicerca.toLowerCase().includes(query);
         }).slice(0, 10);
@@ -171,7 +186,6 @@
           suggestionsList.style.display = "block";
           filtered.forEach(c => {
             const li = document.createElement("li");
-            // Mostra la chiave corretta a prescindere da come è scritta nel JSON
             li.textContent = c.searchKey || c.SearchKey || "Dato mancante";
             li.addEventListener("click", () => selectCustomer(c));
             suggestionsList.appendChild(li);
@@ -179,30 +193,30 @@
         }
       });
 
-      // 5. SELEZIONE CLIENTE E CONVALIDA ANAGRAFICA
+      document.addEventListener("click", (e) => {
+        if (e.target !== searchInput) suggestionsList.style.display = "none";
+      });
+
+      // 5. SELEZIONE CLIENTE (TOLERANT SUL CASE DEI CAMPI JSON)
       function selectCustomer(customer) {
         selectedCustomer = customer;
-        searchInput.value = customer.searchKey;
+        searchInput.value = customer.searchKey || customer.SearchKey || "";
         suggestionsList.innerHTML = "";
         suggestionsList.style.display = "none";
 
-        document.getElementById("codPdV").value = customer.codPdV || "";
-        document.getElementById("ragioneSociale").value = customer.ragioneSociale || "";
-        document.getElementById("codBU").value = customer.codBU || "";
-        document.getElementById("venditore").value = customer.venditore || "";
-        document.getElementById("respVendite").value = customer.responsabileVendite || "";
-        document.getElementById("respCommerciale").value = customer.responsabileCommerciale || "";
-        document.getElementById("emailRSM").value = customer.emailResponsabileCommerciale || "";
+        document.getElementById("codPdV").value = customer.codPdV || customer.CodPdV || "";
+        document.getElementById("ragioneSociale").value = customer.ragioneSociale || customer.RagioneSociale || "";
+        document.getElementById("codBU").value = customer.codBU || customer.CodBU || "";
+        document.getElementById("venditore").value = customer.venditore || customer.Venditore || "";
+        document.getElementById("respVendite").value = customer.responsabileVendite || customer.ResponsabileVendite || "";
+        document.getElementById("respCommerciale").value = customer.responsabileCommerciale || customer.ResponsabileCommerciale || "";
+        document.getElementById("emailRSM").value = customer.emailResponsabileCommerciale || customer.EmailResponsabileCommerciale || "";
 
-        // Sblocca il campo interattivo Gruppo
         document.getElementById("gruppoCliente").disabled = false;
 
-        log("Selezionato PdV: " + customer.codPdV + " | Stato Validità - RSM: " + customer.CheckRSM + ", RV: " + customer.CheckRV);
-        
-        // Se uno dei controlli e-mail è KO, avvisa nel log ma permetti il test
-        if (customer.CheckRSM === "KO" || customer.CheckRV === "KO") {
-          log("WARNING: Presenza di anomalie nelle email (CheckRSM/RV = KO).");
-        }
+        const checkRSM = customer.CheckRSM || "Mancante";
+        const checkRV = customer.CheckRV || "Mancante";
+        log("Selezionato PdV: " + (customer.codPdV || customer.CodPdV) + " | Validità - RSM: " + checkRSM + ", RV: " + checkRV);
 
         document.getElementById("attachBtn").disabled = false;
       }
@@ -213,6 +227,15 @@
         if (!item || !item.itemId || !selectedCustomer) return;
 
         const gruppoScelto = document.getElementById("gruppoCliente").value;
+        const cPdv = selectedCustomer.codPdV || selectedCustomer.CodPdV || "";
+        const cRag = selectedCustomer.ragioneSociale || selectedCustomer.RagioneSociale || "";
+        const cBu = selectedCustomer.codBU || selectedCustomer.CodBU || "";
+        const cVen = selectedCustomer.venditore || selectedCustomer.Venditore || "";
+        const cRv = selectedCustomer.responsabileVendite || selectedCustomer.ResponsabileVendite || "";
+        const cRsm = selectedCustomer.responsabileCommerciale || selectedCustomer.ResponsabileCommerciale || "";
+        const cEmailRsm = selectedCustomer.emailResponsabileCommerciale || selectedCustomer.EmailResponsabileCommerciale || "";
+        const checkRSM = selectedCustomer.CheckRSM || "N/A";
+        const checkRV = selectedCustomer.CheckRV || "N/A";
 
         const htmlBody = `
           <html>
@@ -220,27 +243,27 @@
               <p>Richiesta di attivazione procedura RV per il seguente punto vendita:</p>
               <table border="1" cellpadding="6" style="border-collapse: collapse; font-family: Calibri, sans-serif;">
                 <tr style="background-color: #f2f2f2;"><td><b>Campo</b></td><td><b>Valore</b></td></tr>
-                <tr><td>Codice PdV</td><td>${selectedCustomer.codPdV}</td></tr>
-                <tr><td>Ragione Sociale</td><td>${selectedCustomer.ragioneSociale}</td></tr>
-                <tr><td>Business Unit</td><td>${selectedCustomer.codBU}</td></tr>
+                <tr><td>Codice PdV</td><td>${cPdv}</td></tr>
+                <tr><td>Ragione Sociale</td><td>${cRag}</td></tr>
+                <tr><td>Business Unit</td><td>${cBu}</td></tr>
                 <tr><td>Gruppo</td><td><b>${gruppoScelto}</b></td></tr>
-                <tr><td>Venditore</td><td>${selectedCustomer.venditore}</td></tr>
-                <tr><td>Responsabile Vendite (RV)</td><td>${selectedCustomer.responsabileVendite}</td></tr>
-                <tr><td>Responsabile Commerciale (RSM)</td><td>${selectedCustomer.responsabileCommerciale}</td></tr>
+                <tr><td>Venditore</td><td>${cVen}</td></tr>
+                <tr><td>Responsabile Vendites (RV)</td><td>${cRv}</td></tr>
+                <tr><td>Responsabile Commerciale (RSM)</td><td>${cRsm}</td></tr>
               </table>
-              <p>Stato controlli interni al caricamento: CheckRV=${selectedCustomer.CheckRV} | CheckRSM=${selectedCustomer.CheckRSM}</p>
+              <p>Stato controlli interni al caricamento: CheckRV=${checkRV} | CheckRSM=${checkRSM}</p>
             </body>
           </html>
         `;
 
         Office.context.mailbox.displayNewMessageForm({
-          subject: "Richiesta RV - " + selectedCustomer.codPdV + " - " + selectedCustomer.ragioneSociale,
+          subject: "Richiesta RV - " + cPdv + " - " + cRag,
           htmlBody: htmlBody,
-          cc: [selectedCustomer.emailResponsabileCommerciale],
+          cc: [cEmailRsm],
           attachments: [{
             type: "item",
             itemId: item.itemId,
-            name: "Messaggio originario RV - " + selectedCustomer.codPdV + ".eml"
+            name: "Messaggio originario RV - " + cPdv + ".eml"
           }]
         });
         
