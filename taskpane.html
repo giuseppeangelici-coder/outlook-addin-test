@@ -5,122 +5,204 @@
 <title>Test Add-in RV</title>
 <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
 <style>
-  body { font-family: Segoe UI, sans-serif; padding: 16px; font-size: 13px; }
-  h2 { font-size: 15px; margin-bottom: 4px; }
-  #modeLabel { color: #666; margin-bottom: 16px; }
+  body { font-family: 'Segoe UI', sans-serif; padding: 16px; font-size: 13px; color: #333; }
+  h2 { font-size: 15px; margin-bottom: 4px; color: #0078d4; }
+  #modeLabel { color: #666; margin-bottom: 16px; font-size: 11px; }
   label { display: block; margin-top: 12px; font-weight: 600; }
-  select, button { width: 100%; padding: 6px; margin-top: 4px; box-sizing: border-box; }
-  button { margin-top: 16px; background: #0078d4; color: white; border: none; cursor: pointer; padding: 8px; }
-  button:disabled { background: #ccc; }
-  #log { margin-top: 16px; padding: 8px; background: #f3f3f3; font-size: 11px; white-space: pre-wrap; min-height: 60px; }
+  input, select, button { width: 100%; padding: 6px; margin-top: 4px; box-sizing: border-box; border: 1px solid #ccc; borderRadius: 2px; }
+  input[readonly] { background-color: #f3f3f3; color: #666; cursor: not-allowed; }
+  button { margin-top: 16px; background: #0078d4; color: white; border: none; cursor: pointer; padding: 8px; font-weight: bold; }
+  button:disabled { background: #ccc; cursor: not-allowed; }
+  
+  /* Stili per Autocomplete */
+  .search-container { position: relative; }
+  .suggestions-list { 
+    position: absolute; top: 100%; left: 0; right: 0; 
+    background: white; border: 1px solid #ccc; border-top: none; 
+    max-height: 200px; overflow-y: auto; z-index: 1000; display: none; 
+    margin: 0; padding: 0; list-style: none;
+  }
+  .suggestions-list li { padding: 8px; cursor: pointer; border-bottom: 1px solid #eee; }
+  .suggestions-list li:hover { background: #f3f3f3; }
+  
+  #log { margin-top: 16px; padding: 8px; background: #f3f3f3; font-size: 11px; white-space: pre-wrap; min-height: 60px; border: 1px dashed #ccc; }
 </style>
 </head>
 <body>
   <h2>Prototipo Data Entry RV</h2>
-  <div id="modeLabel">Modalita: caricamento...</div>
+  <div id="modeLabel">Modalità: caricamento...</div>
 
-  <label for="fornitore">Fornitore (test cascading)</label>
-  <select id="fornitore">
-    <option value="">-- seleziona --</option>
-    <option value="A">Fornitore A</option>
-    <option value="B">Fornitore B</option>
-  </select>
+  <!-- SEZIONE RICERCA CLIENTE (VERSIONE C) -->
+  <label for="searchCliente">Cerca Cliente (Codice o Ragione Sociale)</label>
+  <div class="search-container">
+    <input type="text" id="searchCliente" placeholder="Es. 6716601537 o MOTO CLUB..." autocomplete="off" disabled>
+    <ul id="suggestions" class="suggestions-list"></ul>
+  </div>
 
-  <label for="tipologia">Tipologia (dipende da Fornitore)</label>
-  <select id="tipologia" disabled>
-    <option value="">-- seleziona prima il fornitore --</option>
-  </select>
+  <!-- CAMPI ANAGRAFICA VALORIZZATI AUTOMATICAMENTE -->
+  <label for="codPdV">Cod PdV</label>
+  <input type="text" id="codPdV" readonly>
 
-  <button id="attachBtn" style="display:none;">Allega messaggio corrente e apri nuova email</button>
-  <button id="fetchTestBtn">Test fetch dati (placeholder)</button>
+  <label for="ragioneSociale">Ragione Sociale</label>
+  <input type="text" id="ragioneSociale" readonly>
+
+  <label for="codBU">Cod BU</label>
+  <input type="text" id="codBU" readonly>
+
+  <label for="venditore">Venditore</label>
+  <input type="text" id="venditore" readonly>
+
+  <label for="respCommerciale">Responsabile Commerciale (RSM)</label>
+  <input type="text" id="respCommerciale" readonly>
+
+  <label for="emailRSM">Email RSM (Destinatario CC)</label>
+  <input type="text" id="emailRSM" readonly>
+
+  <button id="attachBtn" style="display:none;" disabled>Allega e Invia Richiesta RV</button>
 
   <div id="log">Log eventi...</div>
 
   <script>
-    const CASCADE = {
-      A: ["Sconto Volume", "Contributo Esposizione"],
-      B: ["Listing Fee", "Marketing Fund"]
-    };
+    let customerDatabase = []; // Ospediterà i dati del file JSON
+    let selectedCustomer = null; // Il cliente correntemente selezionato
 
     function log(msg) {
       const el = document.getElementById("log");
       el.textContent += "\n" + msg;
+      el.scrollTop = el.scrollHeight;
     }
 
-    Office.onReady((info) => {
+    Office.onReady(async (info) => {
       const params = new URLSearchParams(window.location.search);
       const mode = params.get("mode") || "general";
-      document.getElementById("modeLabel").textContent = "Modalita: " + mode +
-        " | Host: " + info.host + " | Platform: " + info.platform;
+      document.getElementById("modeLabel").textContent = "Modalità: " + mode + " | Host: " + info.host;
 
       if (mode === "attach") {
         document.getElementById("attachBtn").style.display = "block";
       }
 
-      document.getElementById("fornitore").addEventListener("change", (e) => {
-        const tipoSelect = document.getElementById("tipologia");
-        const opts = CASCADE[e.target.value];
-        tipoSelect.innerHTML = "";
-        if (opts) {
-          tipoSelect.disabled = false;
-          opts.forEach(o => {
-            const opt = document.createElement("option");
-            opt.value = o;
-            opt.textContent = o;
-            tipoSelect.appendChild(opt);
+      // 1. CARICAMENTO INIZIALE DEI DATI DA GITHUB PAGES
+      const url = "https://giuseppeangelici-coder.github.io/outlook-addin-test/customerMaster.json";
+      log("Avvio caricamento anagrafica da: " + url);
+      
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Status HTTP " + res.status);
+        customerDatabase = await res.json();
+        log("Anagrafica caricata. Record totali: " + customerDatabase.length);
+        
+        // Sblocca la casella di ricerca
+        document.getElementById("searchCliente").disabled = false;
+        document.getElementById("searchCliente").placeholder = "Cerca per Codice o Nome...";
+      } catch (err) {
+        log("ERRORE bloccante nel caricamento dati: " + err.message);
+      }
+
+      // 2. MOTORE DI RICERCA / AUTOCOMPLETE (INPUT EVENT)
+      const searchInput = document.getElementById("searchCliente");
+      const suggestionsList = document.getElementById("suggestions");
+
+      searchInput.addEventListener("input", (e) => {
+        const query = e.target.value.toLowerCase().trim();
+        suggestionsList.innerHTML = "";
+        suggestionsList.style.display = "none";
+
+        if (query.length < 2) return; // Cerca solo dopo 2 caratteri
+
+        // Filtra sulla SearchKey impostata da Power Query
+        const filtered = customerDatabase.filter(c => 
+          c.SearchKey && c.SearchKey.toLowerCase().includes(query)
+        ).slice(0, 10); // Limita a 10 suggerimenti visibili per motivi di spazio
+
+        if (filtered.length > 0) {
+          suggestionsList.style.display = "block";
+          filtered.forEach(c => {
+            const li = document.createElement("li");
+            li.textContent = c.SearchKey;
+            li.addEventListener("click", () => {
+              selectCustomer(c);
+            });
+            suggestionsList.appendChild(li);
           });
-          log("Cascading OK: " + opts.length + " opzioni caricate per " + e.target.value);
-        } else {
-          tipoSelect.disabled = true;
-          tipoSelect.innerHTML = '<option value="">-- seleziona prima il fornitore --</option>';
         }
       });
 
+      // Chiude la lista dei suggerimenti cliccando fuori
+      document.addEventListener("click", (e) => {
+        if (e.target !== searchInput) {
+          suggestionsList.style.display = "none";
+        }
+      });
+
+      // 3. VALORIZZAZIONE AUTOMATICA DELLA GERARCHIA
+      function selectCustomer(customer) {
+        selectedCustomer = customer;
+        searchInput.value = customer.SearchKey;
+        suggestionsList.innerHTML = "";
+        suggestionsList.style.display = "none";
+
+        // Assegnazione rispettando le chiavi originali con parentesi quadre
+        document.getElementById("codPdV").value = customer["PdV[Cod PdV]"] || "";
+        document.getElementById("ragioneSociale").value = customer["PdV[Ragione Sociale PdV]"] || "";
+        document.getElementById("codBU").value = customer["PdV[Cod BU]"] || "";
+        document.getElementById("venditore").value = customer["Forza di Vendita[Venditore]"] || "";
+        document.getElementById("respCommerciale").value = customer["Forza di Vendita[Responsabile Commerciale]"] || "";
+        document.getElementById("emailRSM").value = customer["EmailResponsabileCommerciale"] || "";
+
+        log("Cliente selezionato: " + customer["PdV[Cod PdV]"] + " - Verifica RSM/RV: " + customer["CheckRSM"] + "/" + customer["CheckRV"]);
+        
+        // Abilita il pulsante di generazione email se siamo in modalità attach
+        document.getElementById("attachBtn").disabled = false;
+      }
+
+      // 4. GENERAZIONE NUOVA EMAIL CON ALLEGATO AUTOMATICO (OFFICE.JS)
       document.getElementById("attachBtn").addEventListener("click", () => {
         const item = Office.context.mailbox.item;
         if (!item || !item.itemId) {
-          log("ERRORE: nessun itemId disponibile nel contesto corrente");
+          log("ERRORE: Impossibile recuperare l'itemId del messaggio corrente.");
           return;
         }
-        log("itemId corrente: " + item.itemId);
+
+        if (!selectedCustomer) {
+          log("ERRORE: Seleziona prima un cliente.");
+          return;
+        }
+
+        log("Avvio generazione email per itemId: " + item.itemId);
+
+        // Generazione corpo HTML dinamico basato sui dati del form
+        const htmlBody = `
+          <html>
+            <body>
+              <p>Saluti,</p>
+              <p>Si richiede l'attivazione della procedura RV per il seguente cliente:</p>
+              <table border="1" cellpadding="6" style="border-collapse: collapse; font-family: Calibri, sans-serif;">
+                <tr style="background-color: #f2f2f2;"><td><b>Campo</b></td><td><b>Valore</b></td></tr>
+                <tr><td>Codice PdV</td><td>${selectedCustomer["PdV[Cod PdV]"]}</td></tr>
+                <tr><td>Ragione Sociale</td><td>${selectedCustomer["PdV[Ragione Sociale PdV]"]}</td></tr>
+                <tr><td>Business Unit</td><td>${selectedCustomer["PdV[Cod BU]"]}</td></tr>
+                <tr><td>Venditore</td><td>${selectedCustomer["Forza di Vendita[Venditore]"]}</td></tr>
+                <tr><td>Responsabile Commerciale (RSM)</td><td>${selectedCustomer["Forza di Vendita[Responsabile Commerciale]"]}</td></tr>
+              </table>
+              <p>In allegato alla presente trovate il messaggio Outlook originale di riferimento.</p>
+            </body>
+          </html>
+        `;
+
         Office.context.mailbox.displayNewMessageForm({
-          subject: "Richiesta RV - Test",
-          htmlBody: "<p>Corpo di test generato dal task pane.</p>",
+          subject: "Richiesta RV - " + selectedCustomer["PdV[Cod PdV]"] + " - " + selectedCustomer["PdV[Ragione Sociale PdV]"],
+          htmlBody: htmlBody,
+          cc: [selectedCustomer["EmailResponsabileCommerciale"]], // Inserisce automaticamente il RSM in CC
           attachments: [
             {
               type: "item",
               itemId: item.itemId,
-              name: "Messaggio originale"
+              name: "Messaggio originario RV - " + selectedCustomer["PdV[Cod PdV]"] + ".eml"
             }
           ]
         });
-        log("displayNewMessageForm invocato con allegato.");
-      });
 
-      document.getElementById("fetchTestBtn").addEventListener("click", async () => {
-        const url = "https://giuseppeangelici-coder.github.io/outlook-addin-test/customerMaster.json";
-        log("Fetch avviato verso: " + url);
-        try {
-          const res = await fetch(url, { credentials: "include" });
-          log("Risposta HTTP status: " + res.status + " | content-type: " + res.headers.get("content-type"));
-          const text = await res.text();
-          if (text.trim().startsWith("<")) {
-            log("ERRORE: risposta è HTML, non JSON — probabile redirect a login (problema di autenticazione).");
-            log("Anteprima risposta: " + text.substring(0, 150));
-          } else {
-            try {
-              const data = JSON.parse(text);
-              const count = Array.isArray(data) ? data.length : Object.keys(data).length;
-              log("OK: JSON valido ricevuto. Elementi: " + count);
-              log("Anteprima: " + JSON.stringify(data).substring(0, 200));
-            } catch (parseErr) {
-              log("ERRORE parsing JSON: " + parseErr.message);
-              log("Anteprima risposta: " + text.substring(0, 150));
-            }
-          }
-        } catch (fetchErr) {
-          log("ERRORE fetch (probabile blocco CORS lato SharePoint): " + fetchErr.message);
-        }
+        log("displayNewMessageForm eseguito. Controlla la nuova finestra di Outlook.");
       });
     });
   </script>
