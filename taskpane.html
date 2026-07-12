@@ -7,14 +7,14 @@
 <style>
   body { font-family: 'Segoe UI', sans-serif; padding: 16px; font-size: 13px; color: #333; }
   h2 { font-size: 15px; margin-bottom: 4px; color: #0078d4; }
-  #modeLabel { color: #666; margin-bottom: 16px; font-size: 11px; }
+  #modeLabel, #userLabel { color: #666; margin-bottom: 8px; font-size: 11px; }
+  #userLabel { font-weight: bold; color: #107c41; margin-bottom: 16px; }
   label { display: block; margin-top: 12px; font-weight: 600; }
-  input, select, button { width: 100%; padding: 6px; margin-top: 4px; box-sizing: border-box; border: 1px solid #ccc; borderRadius: 2px; }
+  input, select, button { width: 100%; padding: 6px; margin-top: 4px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 2px; }
   input[readonly] { background-color: #f3f3f3; color: #666; cursor: not-allowed; }
   button { margin-top: 16px; background: #0078d4; color: white; border: none; cursor: pointer; padding: 8px; font-weight: bold; }
   button:disabled { background: #ccc; cursor: not-allowed; }
   
-  /* Stili per Autocomplete */
   .search-container { position: relative; }
   .suggestions-list { 
     position: absolute; top: 100%; left: 0; right: 0; 
@@ -31,15 +31,16 @@
 <body>
   <h2>Prototipo Data Entry RV</h2>
   <div id="modeLabel">Modalità: caricamento...</div>
+  <div id="userLabel">Utente: verifica in corso...</div>
 
-  <!-- SEZIONE RICERCA CLIENTE (VERSIONE C) -->
+  <!-- SEZIONE RICERCA CLIENTE -->
   <label for="searchCliente">Cerca Cliente (Codice o Ragione Sociale)</label>
   <div class="search-container">
-    <input type="text" id="searchCliente" placeholder="Es. 6716601537 o MOTO CLUB..." autocomplete="off" disabled>
+    <input type="text" id="searchCliente" placeholder="Caricamento database..." autocomplete="off" disabled>
     <ul id="suggestions" class="suggestions-list"></ul>
   </div>
 
-  <!-- CAMPI ANAGRAFICA VALORIZZATI AUTOMATICAMENTE -->
+  <!-- CAMPI ANAGRAFICA (READ-ONLY) -->
   <label for="codPdV">Cod PdV</label>
   <input type="text" id="codPdV" readonly>
 
@@ -52,19 +53,36 @@
   <label for="venditore">Venditore</label>
   <input type="text" id="venditore" readonly>
 
+  <label for="respVendite">Responsabile Vendite (RV)</label>
+  <input type="text" id="respVendite" readonly>
+
   <label for="respCommerciale">Responsabile Commerciale (RSM)</label>
   <input type="text" id="respCommerciale" readonly>
 
   <label for="emailRSM">Email RSM (Destinatario CC)</label>
   <input type="text" id="emailRSM" readonly>
 
+  <!-- CAMPO INTERATTIVO DA COMPILARE -->
+  <label for="gruppoCliente">Gruppo?</label>
+  <select id="gruppoCliente" disabled>
+    <option value="No">No</option>
+    <option value="Sì">Sì</option>
+  </select>
+
   <button id="attachBtn" style="display:none;" disabled>Allega e Invia Richiesta RV</button>
 
   <div id="log">Log eventi...</div>
 
   <script>
-    let customerDatabase = []; // Ospediterà i dati del file JSON
-    let selectedCustomer = null; // Il cliente correntemente selezionato
+    // LISTA UTENTI MASTER PER RLS
+    const MASTER_USERS = [
+      "giuseppe.angelici@partesa.it", 
+      "fabrizio@partesa.it"
+    ];
+
+    let fullDatabase = [];      
+    let filteredDatabase = [];  
+    let selectedCustomer = null;
 
     function log(msg) {
       const el = document.getElementById("log");
@@ -81,24 +99,59 @@
         document.getElementById("attachBtn").style.display = "block";
       }
 
-      // 1. CARICAMENTO INIZIALE DEI DATI DA GITHUB PAGES
+      // 1. IDENTIFICAZIONE UTENTE
+      let userEmail = "";
+      if (Office.context.mailbox && Office.context.mailbox.userProfile) {
+        userEmail = Office.context.mailbox.userProfile.emailAddress.toLowerCase().trim();
+      } else {
+        userEmail = "giuseppe.angelici@partesa.it"; 
+      }
+      document.getElementById("userLabel").textContent = "Utente: " + userEmail;
+
+      // 2. RECUPERO JSON DA GITHUB
       const url = "https://giuseppeangelici-coder.github.io/outlook-addin-test/customerMaster.json";
       log("Avvio caricamento anagrafica da: " + url);
       
       try {
         const res = await fetch(url);
         if (!res.ok) throw new Error("Status HTTP " + res.status);
-        customerDatabase = await res.json();
-        log("Anagrafica caricata. Record totali: " + customerDatabase.length);
+        fullDatabase = await res.json();
+        log("Anagrafica scaricata. Record totali: " + fullDatabase.length);
         
-        // Sblocca la casella di ricerca
-        document.getElementById("searchCliente").disabled = false;
-        document.getElementById("searchCliente").placeholder = "Cerca per Codice o Nome...";
+        applyRowLevelSecurity(userEmail);
+
       } catch (err) {
-        log("ERRORE bloccante nel caricamento dati: " + err.message);
+        log("ERRORE: " + err.message);
       }
 
-      // 2. MOTORE DI RICERCA / AUTOCOMPLETE (INPUT EVENT)
+      // 3. LOGICA ROW-LEVEL SECURITY (RLS)
+      function applyRowLevelSecurity(email) {
+        if (MASTER_USERS.map(e => e.toLowerCase()).includes(email)) {
+          filteredDatabase = fullDatabase;
+          log("Profilo: MASTER DETECTED. Visibilità completa (" + filteredDatabase.length + " record).");
+        } 
+        else if (fullDatabase.some(c => c.emailResponsabileVendite && c.emailResponsabileVendite.toLowerCase() === email)) {
+          filteredDatabase = fullDatabase.filter(c => c.emailResponsabileVendite && c.emailResponsabileVendite.toLowerCase() === email);
+          log("Profilo: RV DETECTED. Record associati: " + filteredDatabase.length);
+        } 
+        else if (fullDatabase.some(c => c.emailResponsabileCommerciale && c.emailResponsabileCommerciale.toLowerCase() === email)) {
+          filteredDatabase = fullDatabase.filter(c => c.emailResponsabileCommerciale && c.emailResponsabileCommerciale.toLowerCase() === email);
+          log("Profilo: RSM DETECTED. Record associati all'area: " + filteredDatabase.length);
+        } 
+        else {
+          filteredDatabase = fullDatabase; 
+          log("Email non in anagrafica. Modalità provvisoria di test: sbloccati tutti i record.");
+        }
+
+        if (filteredDatabase.length > 0) {
+          document.getElementById("searchCliente").disabled = false;
+          document.getElementById("searchCliente").placeholder = "Cerca per Codice o Nome...";
+        } else {
+          document.getElementById("searchCliente").placeholder = "Nessun cliente disponibile.";
+        }
+      }
+
+      // 4. AUTOCOMPLETE
       const searchInput = document.getElementById("searchCliente");
       const suggestionsList = document.getElementById("suggestions");
 
@@ -107,102 +160,93 @@
         suggestionsList.innerHTML = "";
         suggestionsList.style.display = "none";
 
-        if (query.length < 2) return; // Cerca solo dopo 2 caratteri
+        if (query.length < 2) return;
 
-        // Filtra sulla SearchKey impostata da Power Query
-        const filtered = customerDatabase.filter(c => 
-          c.SearchKey && c.SearchKey.toLowerCase().includes(query)
-        ).slice(0, 10); // Limita a 10 suggerimenti visibili per motivi di spazio
+        const filtered = filteredDatabase.filter(c => 
+          c.searchKey && c.searchKey.toLowerCase().includes(query)
+        ).slice(0, 10);
 
         if (filtered.length > 0) {
           suggestionsList.style.display = "block";
           filtered.forEach(c => {
             const li = document.createElement("li");
-            li.textContent = c.SearchKey;
-            li.addEventListener("click", () => {
-              selectCustomer(c);
-            });
+            li.textContent = c.searchKey;
+            li.addEventListener("click", () => selectCustomer(c));
             suggestionsList.appendChild(li);
           });
         }
       });
 
-      // Chiude la lista dei suggerimenti cliccando fuori
       document.addEventListener("click", (e) => {
-        if (e.target !== searchInput) {
-          suggestionsList.style.display = "none";
-        }
+        if (e.target !== searchInput) suggestionsList.style.display = "none";
       });
 
-      // 3. VALORIZZAZIONE AUTOMATICA DELLA GERARCHIA
+      // 5. SELEZIONE CLIENTE E CONVALIDA ANAGRAFICA
       function selectCustomer(customer) {
         selectedCustomer = customer;
-        searchInput.value = customer.SearchKey;
+        searchInput.value = customer.searchKey;
         suggestionsList.innerHTML = "";
         suggestionsList.style.display = "none";
 
-        // Assegnazione rispettando le chiavi originali con parentesi quadre
-        document.getElementById("codPdV").value = customer["PdV[Cod PdV]"] || "";
-        document.getElementById("ragioneSociale").value = customer["PdV[Ragione Sociale PdV]"] || "";
-        document.getElementById("codBU").value = customer["PdV[Cod BU]"] || "";
-        document.getElementById("venditore").value = customer["Forza di Vendita[Venditore]"] || "";
-        document.getElementById("respCommerciale").value = customer["Forza di Vendita[Responsabile Commerciale]"] || "";
-        document.getElementById("emailRSM").value = customer["EmailResponsabileCommerciale"] || "";
+        document.getElementById("codPdV").value = customer.codPdV || "";
+        document.getElementById("ragioneSociale").value = customer.ragioneSociale || "";
+        document.getElementById("codBU").value = customer.codBU || "";
+        document.getElementById("venditore").value = customer.venditore || "";
+        document.getElementById("respVendite").value = customer.responsabileVendite || "";
+        document.getElementById("respCommerciale").value = customer.responsabileCommerciale || "";
+        document.getElementById("emailRSM").value = customer.emailResponsabileCommerciale || "";
 
-        log("Cliente selezionato: " + customer["PdV[Cod PdV]"] + " - Verifica RSM/RV: " + customer["CheckRSM"] + "/" + customer["CheckRV"]);
+        // Sblocca il campo interattivo Gruppo
+        document.getElementById("gruppoCliente").disabled = false;
+
+        log("Selezionato PdV: " + customer.codPdV + " | Stato Validità - RSM: " + customer.CheckRSM + ", RV: " + customer.CheckRV);
         
-        // Abilita il pulsante di generazione email se siamo in modalità attach
+        // Se uno dei controlli e-mail è KO, avvisa nel log ma permetti il test
+        if (customer.CheckRSM === "KO" || customer.CheckRV === "KO") {
+          log("WARNING: Presenza di anomalie nelle email (CheckRSM/RV = KO).");
+        }
+
         document.getElementById("attachBtn").disabled = false;
       }
 
-      // 4. GENERAZIONE NUOVA EMAIL CON ALLEGATO AUTOMATICO (OFFICE.JS)
+      // 6. GENERAZIONE EMAIL CON CAMPO GRUPPO
       document.getElementById("attachBtn").addEventListener("click", () => {
         const item = Office.context.mailbox.item;
-        if (!item || !item.itemId) {
-          log("ERRORE: Impossibile recuperare l'itemId del messaggio corrente.");
-          return;
-        }
+        if (!item || !item.itemId || !selectedCustomer) return;
 
-        if (!selectedCustomer) {
-          log("ERRORE: Seleziona prima un cliente.");
-          return;
-        }
+        const gruppoScelto = document.getElementById("gruppoCliente").value;
 
-        log("Avvio generazione email per itemId: " + item.itemId);
-
-        // Generazione corpo HTML dinamico basato sui dati del form
         const htmlBody = `
           <html>
             <body>
-              <p>Saluti,</p>
-              <p>Si richiede l'attivazione della procedura RV per il seguente cliente:</p>
+              <p>Richiesta di attivazione procedura RV per il seguente punto vendita:</p>
               <table border="1" cellpadding="6" style="border-collapse: collapse; font-family: Calibri, sans-serif;">
                 <tr style="background-color: #f2f2f2;"><td><b>Campo</b></td><td><b>Valore</b></td></tr>
-                <tr><td>Codice PdV</td><td>${selectedCustomer["PdV[Cod PdV]"]}</td></tr>
-                <tr><td>Ragione Sociale</td><td>${selectedCustomer["PdV[Ragione Sociale PdV]"]}</td></tr>
-                <tr><td>Business Unit</td><td>${selectedCustomer["PdV[Cod BU]"]}</td></tr>
-                <tr><td>Venditore</td><td>${selectedCustomer["Forza di Vendita[Venditore]"]}</td></tr>
-                <tr><td>Responsabile Commerciale (RSM)</td><td>${selectedCustomer["Forza di Vendita[Responsabile Commerciale]"]}</td></tr>
+                <tr><td>Codice PdV</td><td>${selectedCustomer.codPdV}</td></tr>
+                <tr><td>Ragione Sociale</td><td>${selectedCustomer.ragioneSociale}</td></tr>
+                <tr><td>Business Unit</td><td>${selectedCustomer.codBU}</td></tr>
+                <tr><td>Gruppo</td><td><b>${gruppoScelto}</b></td></tr>
+                <tr><td>Venditore</td><td>${selectedCustomer.venditore}</td></tr>
+                <tr><td>Responsabile Vendite (RV)</td><td>${selectedCustomer.responsabileVendite}</td></tr>
+                <tr><td>Responsabile Commerciale (RSM)</td><td>${selectedCustomer.responsabileCommerciale}</td></tr>
               </table>
-              <p>In allegato alla presente trovate il messaggio Outlook originale di riferimento.</p>
+              <p>Stato controlli interni al caricamento: CheckRV=${selectedCustomer.CheckRV} | CheckRSM=${selectedCustomer.CheckRSM}</p>
             </body>
           </html>
         `;
 
         Office.context.mailbox.displayNewMessageForm({
-          subject: "Richiesta RV - " + selectedCustomer["PdV[Cod PdV]"] + " - " + selectedCustomer["PdV[Ragione Sociale PdV]"],
+          subject: "Richiesta RV - " + selectedCustomer.codPdV + " - " + selectedCustomer.ragioneSociale,
           htmlBody: htmlBody,
-          cc: [selectedCustomer["EmailResponsabileCommerciale"]], // Inserisce automaticamente il RSM in CC
-          attachments: [
-            {
-              type: "item",
-              itemId: item.itemId,
-              name: "Messaggio originario RV - " + selectedCustomer["PdV[Cod PdV]"] + ".eml"
-            }
-          ]
+          cc: [selectedCustomer.emailResponsabileCommerciale],
+          attachments: [{
+            type: "item",
+            itemId: item.itemId,
+            name: "Messaggio originario RV - " + selectedCustomer.codPdV + ".eml"
+          }]
         });
-
-        log("displayNewMessageForm eseguito. Controlla la nuova finestra di Outlook.");
+        
+        log("Finestra email creata con successo.");
       });
     });
   </script>
