@@ -151,7 +151,7 @@
         }
       }
 
-      // 4. AUTOCOMPLETE
+     // 4. AUTOCOMPLETE (CORRETTO PER KEY CASE-SENSITIVE)
       const searchInput = document.getElementById("searchCliente");
       const suggestionsList = document.getElementById("suggestions");
 
@@ -162,23 +162,22 @@
 
         if (query.length < 2) return;
 
-        const filtered = filteredDatabase.filter(c => 
-          c.searchKey && c.searchKey.toLowerCase().includes(query)
-        ).slice(0, 10);
+        const filtered = filteredDatabase.filter(c => {
+          // Controlla sia searchKey che SearchKey per evitare errori di maiuscole nel JSON
+          const chiaveRicerca = c.searchKey || c.SearchKey || "";
+          return chiaveRicerca.toLowerCase().includes(query);
+        }).slice(0, 10);
 
         if (filtered.length > 0) {
           suggestionsList.style.display = "block";
           filtered.forEach(c => {
             const li = document.createElement("li");
-            li.textContent = c.searchKey;
+            // Mostra la chiave corretta a prescindere da come è scritta nel JSON
+            li.textContent = c.searchKey || c.SearchKey || "Dato mancante";
             li.addEventListener("click", () => selectCustomer(c));
             suggestionsList.appendChild(li);
           });
         }
-      });
-
-      document.addEventListener("click", (e) => {
-        if (e.target !== searchInput) suggestionsList.style.display = "none";
       });
 
       // 5. SELEZIONE CLIENTE E CONVALIDA ANAGRAFICA
