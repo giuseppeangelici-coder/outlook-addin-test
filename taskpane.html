@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<title>Test Add-in RV</title>
+<script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+<style>
+  body { font-family: Segoe UI, sans-serif; padding: 16px; font-size: 13px; }
+  h2 { font-size: 15px; margin-bottom: 4px; }
+  #modeLabel { color: #666; margin-bottom: 16px; }
+  label { display: block; margin-top: 12px; font-weight: 600; }
+  select, button { width: 100%; padding: 6px; margin-top: 4px; box-sizing: border-box; }
+  button { margin-top: 16px; background: #0078d4; color: white; border: none; cursor: pointer; padding: 8px; }
+  button:disabled { background: #ccc; }
+  #log { margin-top: 16px; padding: 8px; background: #f3f3f3; font-size: 11px; white-space: pre-wrap; min-height: 60px; }
+</style>
+</head>
+<body>
+  <h2>Prototipo Data Entry RV</h2>
+  <div id="modeLabel">Modalita: caricamento...</div>
+
+  <label for="fornitore">Fornitore (test cascading)</label>
+  <select id="fornitore">
+    <option value="">-- seleziona --</option>
+    <option value="A">Fornitore A</option>
+    <option value="B">Fornitore B</option>
+  </select>
+
+  <label for="tipologia">Tipologia (dipende da Fornitore)</label>
+  <select id="tipologia" disabled>
+    <option value="">-- seleziona prima il fornitore --</option>
+  </select>
+
+  <button id="attachBtn" style="display:none;">Allega messaggio corrente e apri nuova email</button>
+  <button id="fetchTestBtn">Test fetch dati (placeholder)</button>
+
+  <div id="log">Log eventi...</div>
+
+  <script>
+    const CASCADE = {
+      A: ["Sconto Volume", "Contributo Esposizione"],
+      B: ["Listing Fee", "Marketing Fund"]
+    };
+
+    function log(msg) {
+      const el = document.getElementById("log");
+      el.textContent += "\n" + msg;
+    }
+
+    Office.onReady((info) => {
+      const params = new URLSearchParams(window.location.search);
+      const mode = params.get("mode") || "general";
+      document.getElementById("modeLabel").textContent = "Modalita: " + mode +
+        " | Host: " + info.host + " | Platform: " + info.platform;
+
+      if (mode === "attach") {
+        document.getElementById("attachBtn").style.display = "block";
+      }
+
+      document.getElementById("fornitore").addEventListener("change", (e) => {
+        const tipoSelect = document.getElementById("tipologia");
+        const opts = CASCADE[e.target.value];
+        tipoSelect.innerHTML = "";
+        if (opts) {
+          tipoSelect.disabled = false;
+          opts.forEach(o => {
+            const opt = document.createElement("option");
+            opt.value = o;
+            opt.textContent = o;
+            tipoSelect.appendChild(opt);
+          });
+          log("Cascading OK: " + opts.length + " opzioni caricate per " + e.target.value);
+        } else {
+          tipoSelect.disabled = true;
+          tipoSelect.innerHTML = '<option value="">-- seleziona prima il fornitore --</option>';
+        }
+      });
+
+      document.getElementById("attachBtn").addEventListener("click", () => {
+        const item = Office.context.mailbox.item;
+        if (!item || !item.itemId) {
+          log("ERRORE: nessun itemId disponibile nel contesto corrente");
+          return;
+        }
+        log("itemId corrente: " + item.itemId);
+        Office.context.mailbox.displayNewMessageForm({
+          subject: "Richiesta RV - Test",
+          htmlBody: "<p>Corpo di test generato dal task pane.</p>",
+          attachments: [
+            {
+              type: "item",
+              itemId: item.itemId,
+              name: "Messaggio originale"
+            }
+          ]
+        });
+        log("displayNewMessageForm invocato con allegato.");
+      });
+
+      document.getElementById("fetchTestBtn").addEventListener("click", async () => {
+        log("Fetch test: nessun URL dati configurato ancora in questo prototipo.");
+      });
+    });
+  </script>
+</body>
+</html>
