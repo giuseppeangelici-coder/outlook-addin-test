@@ -98,7 +98,29 @@
       });
 
       document.getElementById("fetchTestBtn").addEventListener("click", async () => {
-        log("Fetch test: nessun URL dati configurato ancora in questo prototipo.");
+        const url = "https://heiway.sharepoint.com/sites/ACCORDIBUCENTRO9/Shared%20Documents/PBI/customerMaster.json";
+        log("Fetch avviato verso: " + url);
+        try {
+          const res = await fetch(url, { credentials: "include" });
+          log("Risposta HTTP status: " + res.status + " | content-type: " + res.headers.get("content-type"));
+          const text = await res.text();
+          if (text.trim().startsWith("<")) {
+            log("ERRORE: risposta è HTML, non JSON — probabile redirect a login (problema di autenticazione).");
+            log("Anteprima risposta: " + text.substring(0, 150));
+          } else {
+            try {
+              const data = JSON.parse(text);
+              const count = Array.isArray(data) ? data.length : Object.keys(data).length;
+              log("OK: JSON valido ricevuto. Elementi: " + count);
+              log("Anteprima: " + JSON.stringify(data).substring(0, 200));
+            } catch (parseErr) {
+              log("ERRORE parsing JSON: " + parseErr.message);
+              log("Anteprima risposta: " + text.substring(0, 150));
+            }
+          }
+        } catch (fetchErr) {
+          log("ERRORE fetch (probabile blocco CORS lato SharePoint): " + fetchErr.message);
+        }
       });
     });
   </script>
