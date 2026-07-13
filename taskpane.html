@@ -1,11 +1,10 @@
 <!-- 
   ADD-IN RICHIESTE RV - TASKPANE COMPONENT
-  Version: 1.4.0-Validity-Management
+  Version: 1.5.0-Streamlined-Layout
   Date: 2026-07-13
-  Changes: Aggiunta gestione dinamica del Periodo Validità.
-           Opzione 1: Vincolo date su anno selezionato.
-           Opzione 2: Calcolo pro-rata automatico dei pesi percentuali sui giorni per il Pluriennale.
-           Opzione 3: Selezione mese spot anno corrente.
+  Changes: Raddrizzato e snellito il layout rimuovendo i campi di sola lettura (PdV, Ragione Sociale, BU, Email RSM).
+           I dati rimangono persistenti in memoria per la generazione dell'email.
+           Riordinati i campi secondo le specifiche di flusso.
 -->
 <!DOCTYPE html>
 <html>
@@ -20,7 +19,6 @@
   #userLabel { font-weight: bold; color: #107c41; margin-bottom: 16px; }
   label { display: block; margin-top: 12px; font-weight: 600; }
   input, select, button { width: 100%; padding: 6px; margin-top: 4px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 2px; }
-  input[readonly] { background-color: #f3f3f3; color: #666; cursor: not-allowed; }
   button { margin-top: 20px; background: #0078d4; color: white; border: none; cursor: pointer; padding: 8px; font-weight: bold; }
   button:disabled { background: #ccc; cursor: not-allowed; }
   
@@ -44,63 +42,33 @@
   <div id="modeLabel">Modalità: caricamento...</div>
   <div id="userLabel">Utente: verifica in corso...</div>
 
-  <!-- SEZIONE RICERCA CLIENTE -->
+  <!-- 1. CERCA CLIENTE -->
   <label for="searchCliente">Cerca Cliente (Codice o Ragione Sociale)</label>
   <div class="search-container">
     <input type="text" id="searchCliente" placeholder="Caricamento database..." autocomplete="off" disabled>
     <ul id="suggestions" class="suggestions-list"></ul>
   </div>
 
-  <!-- CAMPI ANAGRAFICA ESSENZIALI (READ-ONLY) -->
-  <label for="codPdV">Cod PdV</label>
-  <input type="text" id="codPdV" readonly>
-
-  <label for="ragioneSociale">Ragione Sociale</label>
-  <input type="text" id="ragioneSociale" readonly>
-
-  <label for="codBU">Cod BU</label>
-  <input type="text" id="codBU" readonly>
-
-  <label for="emailRSM">Email RSM (Destinatario CC)</label>
-  <input type="text" id="emailRSM" readonly>
-
-  <!-- SEZIONE FORNITORE E TIPOLOGIA INTERVENTO -->
-  <label for="selectFornitore">Fornitore</label>
-  <select id="selectFornitore" disabled>
-    <option value="">-- Seleziona o cerca per tipologia sotto --</option>
-  </select>
-
-  <label for="inputTipologia">Tipologia Intervento (Cerca linea/prodotto)</label>
-  <input type="text" id="inputTipologia" list="listaTipologie" placeholder="Seleziona prima il fornitore o digita qui..." disabled>
-  <datalist id="listaTipologie"></datalist>
-
-  <!-- SEZIONE BUDGET E GRUPPO -->
-  <label for="selectBudget">Budget</label>
-  <select id="selectBudget" disabled>
-    <option value="">-- Seleziona Budget --</option>
-  </select>
-
+  <!-- 2. GRUPPO -->
   <label for="gruppoCliente">Gruppo?</label>
   <select id="gruppoCliente" disabled>
     <option value="No">No</option>
     <option value="Sì">Sì</option>
   </select>
 
-  <!-- SEZIONE CONDIZIONALE: STIMA BUDGET -->
-  <div id="sezioneStima" style="display: none; margin-top: 12px; padding: 10px; background: #f9f9f9; border-left: 3px solid #0078d4;">
-    <label for="quantitaStima" style="margin-top: 0;">Quantità Stima (Intero)</label>
-    <input type="number" id="quantitaStima" step="1" min="1" placeholder="Inserisci quantità numerica...">
+  <!-- 3. BUDGET -->
+  <label for="selectBudget">Budget</label>
+  <select id="selectBudget" disabled>
+    <option value="">-- Seleziona Budget --</option>
+  </select>
 
-    <label for="unitaMisura" style="margin-top: 10px;">Unità di Misura</label>
-    <select id="unitaMisura">
-      <option value="">-- Seleziona UDM --</option>
-      <option value="PEZZI">PEZZI</option>
-      <option value="COLLI">COLLI</option>
-      <option value="HL">HL</option>
-    </select>
-  </div>
+  <!-- 4. FORNITORE -->
+  <label for="selectFornitore">Fornitore</label>
+  <select id="selectFornitore" disabled>
+    <option value="">-- Seleziona o cerca per tipologia sotto --</option>
+  </select>
 
-  <!-- SEZIONE NUOVA: PERIODO VALIDITÀ -->
+  <!-- 5. PERIODO VALIDITÀ -->
   <label for="selectValidita">Periodo Validità</label>
   <select id="selectValidita" disabled>
     <option value="">-- Seleziona Tipo Validità --</option>
@@ -153,19 +121,38 @@
     </select>
   </div>
 
+  <!-- 6. TIPOLOGIA INTERVENTO -->
+  <label for="inputTipologia">Tipologia Intervento (Cerca linea/prodotto)</label>
+  <input type="text" id="inputTipologia" list="listaTipologie" placeholder="Seleziona prima il fornitore o digita qui..." disabled>
+  <datalist id="listaTipologie"></datalist>
+
+  <!-- 7. CONDIZIONATO: QUANTITÀ E COLLI -->
+  <div id="sezioneStima" style="display: none; margin-top: 12px; padding: 10px; background: #f9f9f9; border-left: 3px solid #0078d4;">
+    <label for="quantitaStima" style="margin-top: 0;">Quantità Stima (Intero)</label>
+    <input type="number" id="quantitaStima" step="1" min="1" placeholder="Inserisci quantità numerica...">
+
+    <label for="unitaMisura" style="margin-top: 10px;">Unità di Misura</label>
+    <select id="unitaMisura">
+      <option value="">-- Seleziona UDM --</option>
+      <option value="PEZZI">PEZZI</option>
+      <option value="COLLI">COLLI</option>
+      <option value="HL">HL</option>
+    </select>
+  </div>
+
   <button id="submitBtn" disabled>Genera Richiesta RV</button>
 
   <div id="log">Log eventi...</div>
 
   <script>
-    const APP_VERSION = "v1.4.0-Validity-Management";
+    const APP_VERSION = "v1.5.0-Streamlined-Layout";
     const MASTER_USERS = ["g.angelici@partesa.it"];
 
     let fullDatabase = [];      
     let filteredDatabase = [];  
     let fornitoreTipologiaDb = [];
     let budgetDb = [];
-    let selectedCustomer = null;
+    let selectedCustomer = null; // Contiene l'intero oggetto cliente selezionato
     let highlightedIndex = -1;
     let calcoloPluriennaleOutput = ""; 
 
@@ -195,8 +182,6 @@
       const urlFornitori = "https://giuseppeangelici-coder.github.io/outlook-addin-test/FornitoriTipologie.json";
       const urlBudget = "https://giuseppeangelici-coder.github.io/outlook-addin-test/Budget.json";
 
-      log("Avvio scaricamento database...");
-
       try {
         const [resClienti, resFornitori, resBudget] = await Promise.all([
           fetch(urlClienti),
@@ -204,16 +189,15 @@
           fetch(urlBudget)
         ]);
 
-        if (!resClienti.ok) throw new Error("Errore database clienti: " + resClienti.status);
-        if (!resFornitori.ok) throw new Error("Errore database fornitori: " + resFornitori.status);
-        if (!resBudget.ok) throw new Error("Errore database budget: " + resBudget.status);
+        if (!resClienti.ok) throw new Error("Errore database clienti");
+        if (!resFornitori.ok) throw new Error("Errore database fornitori");
+        if (!resBudget.ok) throw new Error("Errore database budget");
 
         fullDatabase = await resClienti.json();
         fornitoreTipologiaDb = await resFornitori.json();
         budgetDb = await resBudget.json();
 
-        log("Database caricati con successo.");
-
+        log("Database caricati.");
         applyRowLevelSecurity(userEmail);
         popolaFornitoriUnivoci();
         popolaBudget();
@@ -227,16 +211,12 @@
         const isMaster = MASTER_USERS.map(e => e.toLowerCase()).includes(email);
         if (isMaster) {
           filteredDatabase = fullDatabase;
-          log("Profilo: MASTER DETECTED.");
         } else if (fullDatabase.some(c => (c.emailResponsabileVendite || c.EmailResponsabileVendite || "").toLowerCase() === email)) {
           filteredDatabase = fullDatabase.filter(c => (c.emailResponsabileVendite || c.EmailResponsabileVendite || "").toLowerCase() === email);
-          log("Profilo: RV DETECTED.");
         } else if (fullDatabase.some(c => (c.emailResponsabileCommerciale || c.EmailResponsabileCommerciale || "").toLowerCase() === email)) {
           filteredDatabase = fullDatabase.filter(c => (c.emailResponsabileCommerciale || c.EmailResponsabileCommerciale || "").toLowerCase() === email);
-          log("Profilo: RSM DETECTED.");
         } else {
           filteredDatabase = fullDatabase; 
-          log("Email non in anagrafica. Test mode attiva.");
         }
 
         if (filteredDatabase.length > 0) {
@@ -295,7 +275,6 @@
         });
       }
 
-      // --- 9. LOGICA DI GESTIONE DEL PERIODO DI VALIDITÀ ---
       function setupGestioneValidita() {
         const selectValidita = document.getElementById("selectValidita");
         const sezioni = {
@@ -304,23 +283,15 @@
           spot: document.getElementById("sezSpot")
         };
 
-        // Inputs Annuale
         const annoAnnuale = document.getElementById("annoAnnuale");
         const dataInizioAnnuale = document.getElementById("dataInizioAnnuale");
         const dataFineAnnuale = document.getElementById("dataFineAnnuale");
-
-        // Inputs Pluriennale
         const dataInizioPluri = document.getElementById("dataInizioPluri");
         const dataFinePluri = document.getElementById("dataFinePluri");
-
-        // Inputs Spot
         const meseSpot = document.getElementById("meseSpot");
 
-        // Al cambio del tipo validità, mostra la sezione corrispondente e imposta i required
         selectValidita.addEventListener("change", () => {
           Object.values(sezioni).forEach(s => s.style.display = "none");
-          
-          // Reset required
           dataInizioAnnuale.required = false; dataFineAnnuale.required = false;
           dataInizioPluri.required = false; dataFinePluri.required = false;
           meseSpot.required = false;
@@ -329,12 +300,10 @@
           if (v && sezioni[v]) {
             sezioni[v].style.display = "block";
             if (v === "annuale") {
-              dataInizioAnnuale.required = true;
-              dataFineAnnuale.required = true;
+              dataInizioAnnuale.required = true; dataFineAnnuale.required = true;
               allineaVincoliAnnoAnnuale();
             } else if (v === "pluriennale") {
-              dataInizioPluri.required = true;
-              dataFinePluri.required = true;
+              dataInizioPluri.required = true; dataFinePluri.required = true;
               eseguiCalcoloPluriennale();
             } else if (v === "spot") {
               meseSpot.required = true;
@@ -342,21 +311,15 @@
           }
         });
 
-        // Forza i vincoli min/max sulle date dell'opzione 1 in base all'anno scelto
         function allineaVincoliAnnoAnnuale() {
           const anno = annoAnnuale.value;
-          dataInizioAnnuale.min = `${anno}-01-01`;
-          dataInizioAnnuale.max = `${anno}-12-31`;
-          dataFineAnnuale.min = `${anno}-01-01`;
-          dataFineAnnuale.max = `${anno}-12-31`;
-          
-          // Se la data precedentemente inserita è fuori range, pulisci
+          dataInizioAnnuale.min = `${anno}-01-01`; dataInizioAnnuale.max = `${anno}-12-31`;
+          dataFineAnnuale.min = `${anno}-01-01`; dataFineAnnuale.max = `${anno}-12-31`;
           if (dataInizioAnnuale.value && !dataInizioAnnuale.value.startsWith(anno)) dataInizioAnnuale.value = "";
           if (dataFineAnnuale.value && !dataFineAnnuale.value.startsWith(anno)) dataFineAnnuale.value = "";
         }
         annoAnnuale.addEventListener("change", allineaVincoliAnnoAnnuale);
 
-        // Calcolo automatico Pro-Rata dei Giorni sul Pluriennale
         function eseguiCalcoloPluriennale() {
           const divOutput = document.getElementById("ripartizioneAutomaticaAnni");
           calcoloPluriennaleOutput = "";
@@ -375,9 +338,7 @@
           }
 
           const millisecondiInGiorno = 24 * 60 * 60 * 1000;
-          // Totale giorni compresi estremi
           const totaleGiorni = Math.round((fine - inizio) / millisecondiInGiorno) + 1;
-
           const annoInizio = inizio.getFullYear();
           const annoFine = fine.getFullYear();
           let ripartizione = {};
@@ -385,7 +346,6 @@
           for (let anno = annoInizio; anno <= annoFine; anno++) {
             const dataInizioAnno = new Date(anno, 0, 1);
             const dataFineAnno = new Date(anno, 11, 31);
-
             const dataInizioEffettiva = inizio > dataInizioAnno ? inizio : dataInizioAnno;
             const dataFineEffettiva = fine < dataFineAnno ? fine : dataFineAnno;
 
@@ -393,27 +353,18 @@
             ripartizione[anno] = giorniAnno;
           }
 
-          let htmlTable = `<table style='width:100%; border-collapse:collapse; text-align:left;'>
-            <tr style='background:#eee;'>
-              <th style='padding:4px;'>Anno</th>
-              <th style='padding:4px;'>Giorni Competenza</th>
-              <th style='padding:4px;'>Quota % Peso</th>
-            </tr>`;
-          
+          let htmlTable = `<table style='width:100%; border-collapse:collapse; font-size:11px;'>
+            <tr style='background:#eee;'><th>Anno</th><th>Giorni</th><th>Quota %</th></tr>`;
           let logTesto = [];
 
           Object.keys(ripartizione).forEach(anno => {
             const gg = ripartizione[anno];
             const pct = ((gg / totaleGiorni) * 100).toFixed(1);
-            htmlTable += `<tr>
-              <td style='padding:4px;'>${anno}</td>
-              <td style='padding:4px;'>${gg} gg</td>
-              <td style='padding:4px;'><b>${pct}%</b></td>
-            </tr>`;
+            htmlTable += `<tr><td>${anno}</td><td>${gg} gg</td><td><b>${pct}%</b></td></tr>`;
             logTesto.push(`${anno}: ${gg}gg (${pct}%)`);
           });
 
-          htmlTable += `</table><div style='margin-top:6px; font-weight:bold;'>Giorni Totali complessivi: ${totaleGiorni} gg</div>`;
+          htmlTable += `</table><div style='margin-top:4px; font-weight:bold;'>Totale: ${totaleGiorni} gg</div>`;
           divOutput.innerHTML = htmlTable;
           calcoloPluriennaleOutput = logTesto.join(" | ");
         }
@@ -422,7 +373,7 @@
         dataFinePluri.addEventListener("change", eseguiCalcoloPluriennale);
       }
 
-      // GESTIONE DEI FILTRI INCROCIATI (CASCADING)
+      // FILTRI CASCADING FORNITORI / TIPOLOGIE
       const selectFornitore = document.getElementById("selectFornitore");
       const inputTipologia = document.getElementById("inputTipologia");
       const listaTipologie = document.getElementById("listaTipologie");
@@ -439,7 +390,6 @@
 
         const targetCodice = String(match.CodFornitore).trim();
         const optionEsistente = [...selectFornitore.options].find(o => String(o.value).trim() === targetCodice);
-
         if (optionEsistente) {
           selectFornitore.value = optionEsistente.value;
         }
@@ -466,8 +416,7 @@
       searchInput.addEventListener("input", (e) => {
         highlightedIndex = -1;
         const query = e.target.value.toLowerCase().trim();
-        suggestionsList.innerHTML = "";
-        suggestionsList.style.display = "none";
+        suggestionsList.innerHTML = ""; suggestionsList.style.display = "none";
 
         if (query.length < 2) return;
 
@@ -506,8 +455,7 @@
             selectCustomer(items[highlightedIndex].customerData);
           }
         } else if (e.key === "Escape") {
-          suggestionsList.style.display = "none";
-          highlightedIndex = -1;
+          suggestionsList.style.display = "none"; highlightedIndex = -1;
         }
       });
 
@@ -522,27 +470,25 @@
       function selectCustomer(customer) {
         suggestionsList.style.display = "none";
         highlightedIndex = -1;
-        selectedCustomer = customer;
+        selectedCustomer = customer; // Salviamo l'intero record
         searchInput.value = customer.searchKey || customer.SearchKey || "";
         
+        // Sblocco dei controlli successivi
         document.getElementById("selectBudget").disabled = false;
-        document.getElementById("selectValidita").disabled = false; // SBLOCCO VALIDITA
-        document.getElementById("codPdV").value = customer.codPdV || customer.CodPdV || "";
-        document.getElementById("ragioneSociale").value = customer.ragioneSociale || customer.RagioneSociale || "";
-        document.getElementById("codBU").value = customer.codBU || customer.CodBU || "";
-        document.getElementById("emailRSM").value = customer.emailResponsabileCommerciale || customer.EmailResponsabileCommerciale || "";
-
+        document.getElementById("selectValidita").disabled = false;
         selectFornitore.disabled = false;
         inputTipologia.disabled = false;
         document.getElementById("gruppoCliente").disabled = false;
         submitBtn.disabled = false;
+
+        log("Cliente " + (customer.codPdV || customer.CodPdV) + " agganciato in memoria.");
       }
 
-      // SUBMIT CON CONTROLLO VALIDITÀ COMPILAZIONE
+      // SUBMIT E GENERAZIONE EMAIL
       submitBtn.addEventListener("click", () => {
         if (!selectedCustomer) return;
 
-        // Validazione budget
+        // Validazione budget condizionale
         const quantitaStima = document.getElementById("quantitaStima");
         const unitaMisura = document.getElementById("unitaMisura");
         if (quantitaStima.required) {
@@ -553,10 +499,10 @@
           }
         }
 
-        // VALIDAZIONE CONDIZIONALE NUOVA VALIDITÀ
+        // Validazione periodo validità
         const tipoValidita = document.getElementById("selectValidita").value;
         if (!tipoValidita) {
-          alert("Errore: Selezionare una tipologia di Periodo Validità.");
+          alert("Errore: Selezionare il tipo di Periodo Validità.");
           return;
         }
 
@@ -565,38 +511,22 @@
         if (tipoValidita === "annuale") {
           const dIn = document.getElementById("dataInizioAnnuale").value;
           const dFi = document.getElementById("dataFineAnnuale").value;
-          if (!dIn || !dFi) {
-            alert("Errore: Selezionare le date di inizio e fine per l'intervento annuale.");
-            return;
-          }
-          if (new Date(dIn) > new Date(dFi)) {
-            alert("Errore: La data inizio è successiva alla data fine.");
-            return;
-          }
+          if (!dIn || !dFi) { alert("Errore: Inserire le date per il periodo annuale."); return; }
           stringaDettaglioValidita = `Annuale (Anno ref: ${document.getElementById("annoAnnuale").value}) - Dal ${dIn} al ${dFi}`;
         } 
         else if (tipoValidita === "pluriennale") {
           const dIn = document.getElementById("dataInizioPluri").value;
           const dFi = document.getElementById("dataFinePluri").value;
-          if (!dIn || !dFi) {
-            alert("Errore: Compilare le date del periodo Pluriennale per permettere la ripartizione.");
-            return;
-          }
-          if (new Date(dIn) > new Date(dFi)) {
-            alert("Errore: La data inizio è successiva alla data fine.");
-            return;
-          }
-          stringaDettaglioValidita = `Pluriennale - Dal ${dIn} al ${dFi} [Ripartizione calcolata: ${calcoloPluriennaleOutput}]`;
+          if (!dIn || !dFi) { alert("Errore: Inserire le date per la ripartizione pluriennale."); return; }
+          stringaDettaglioValidita = `Pluriennale - Dal ${dIn} al ${dFi} [Ripartizione: ${calcoloPluriennaleOutput}]`;
         } 
         else if (tipoValidita === "spot") {
           const mScelto = document.getElementById("meseSpot").value;
-          if (!mScelto) {
-            alert("Errore: Selezionare il mese richiesto per l'intervento Una tantum/Spot.");
-            return;
-          }
-          stringaDettaglioValidita = `Una tantum / Spot - Mese liquidazione richiesto: ${mScelto} 2026`;
+          if (!mScelto) { alert("Errore: Selezionare il mese per l'intervento Spot."); return; }
+          stringaDettaglioValidita = `Una tantum / Spot - Mese liquidazione: ${mScelto} 2026`;
         }
 
+        // Recupero i dati dal record nascosto in memoria
         const cPdv = selectedCustomer.codPdV || selectedCustomer.CodPdV || "";
         const cRag = selectedCustomer.ragioneSociale || selectedCustomer.RagioneSociale || "";
         const cBu = selectedCustomer.codBU || selectedCustomer.CodBU || "";
@@ -625,7 +555,7 @@
                 <tr><td>Tipologia Intervento</td><td>${tipologiaScelta}</td></tr>
                 <tr><td>Budget</td><td>${budgetScelto}</td></tr>
                 <tr><td>Quantità Stima</td><td>${qStimaText}</td></tr>
-                <tr><td>Unità di...</td><td>${udmText}</td></tr>
+                <tr><td>Unità di Misura</td><td>${udmText}</td></tr>
                 <tr><td><b>Periodo Validità</b></td><td><span style="color:#d83b01;"><b>${stringaDettaglioValidita}</b></span></td></tr>
                 <tr><td>Venditore</td><td>${cVen}</td></tr>
               </table>
@@ -637,7 +567,7 @@
         const messageFormOptions = {
           subject: "Richiesta RV - " + cPdv + " - " + cRag,
           htmlBody: htmlBody,
-          cc: [cEmailRsm]
+          cc: cEmailRsm ? [cEmailRsm] : [] // Inserito dinamicamente se presente nel database
         };
 
         if (mode === "attach" && Office.context.mailbox.item && Office.context.mailbox.item.itemId) {
@@ -649,7 +579,7 @@
         }
 
         Office.context.mailbox.displayNewMessageForm(messageFormOptions);
-        log("Finestra email creata con dettagli validità.");
+        log("Finestra email creata.");
       });
     });
   </script>
