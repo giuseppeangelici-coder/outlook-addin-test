@@ -186,7 +186,7 @@
         });
       }
 
-      // 5. GESTIONE DEI FILTRI INCROCIATI (CASCADING BIDIREZIONALE)
+      // 5. GESTIONE DEI FILTRI INCROCIATI (CASCADING BIDIREZIONALE CORRETTO)
       const selectFornitore = document.getElementById("selectFornitore");
       const inputTipologia = document.getElementById("inputTipologia");
       const listaTipologie = document.getElementById("listaTipologie");
@@ -198,20 +198,25 @@
         aggiornaDatalistTipologie(codFornitoreSelezionato);
       });
 
-      // Verso B: L'utente scrive o seleziona una tipologia -> Se trova match univoco, assegna il fornitore
+      // Verso B: L'utente scrive o seleziona una tipologia -> Allinea il fornitore
       inputTipologia.addEventListener("input", () => {
-        const valoreDigitato = inputTipologia.value.trim();
+        const valoreDigitato = inputTipologia.value.trim().toLowerCase();
         
-        // Verifica se il valore inserito corrisponde esattamente a una delle tipologie nel db
-        const match = fornitoreTipologiaDb.find(item => item.TipologiaIntervento === valoreDigitato);
+        // Cerca una corrispondenza esatta (case-insensitive) nel database delle tipologie
+        const match = fornitoreTipologiaDb.find(item => 
+          (item.TipologiaIntervento || "").trim().toLowerCase() === valoreDigitato
+        );
         
         if (match) {
-          // Se il fornitore non era selezionato o era diverso, lo allinea automaticamente
-          if (selectFornitore.value !== match.CodiceFornitore) {
-            selectFornitore.value = match.CodiceFornitore;
-            aggiornaDatalistTipologie(match.CodiceFornitore);
-            log("Fornitore allineato automaticamente a: " + match.RagioneSocialeFornitore);
-          }
+          // Normalizza i codici per il confronto per evitare mancate corrispondenze di stringa/numero
+          const targetCodice = String(match.CodiceFornitore).trim();
+          
+          // Forza la selezione del fornitore corrispondente nella select
+          selectFornitore.value = targetCodice;
+          
+          // Rigenera la lista filtrata per quel fornitore senza svuotare il testo appena inserito
+          aggiornaDatalistTipologie(targetCodice);
+          log("Fornitore allineato automaticamente a: " + match.RagioneSocialeFornitore);
         }
       });
 
@@ -219,7 +224,7 @@
         listaTipologie.innerHTML = "";
         
         const tipologieFiltrate = fornitoreTipologiaDb.filter(item => {
-          return codFornitore === "" || item.CodiceFornitore === codFornitore;
+          return codFornitore === "" || String(item.CodiceFornitore).trim() === String(codFornitore).trim();
         });
 
         tipologieFiltrate.forEach(item => {
@@ -232,7 +237,7 @@
       // Al caricamento iniziale prepariamo la lista completa di tutte le tipologie
       aggiornaDatalistTipologie();
 
-      // 6. AUTOCOMPLETE CLIENTE
+      // 6. AUTOCOMPLETE CLIENTE (Invariato)
       const searchInput = document.getElementById("searchCliente");
       const suggestionsList = document.getElementById("suggestions");
 
@@ -262,7 +267,7 @@
         if (e.target !== searchInput) suggestionsList.style.display = "none";
       });
 
-      // 7. SELEZIONE CLIENTE -> SBLOCCO CAMPI SUCCESSIVI
+      // 7. SELEZIONE CLIENTE -> SBLOCCO COMPLETO DEI CAMPI
       function selectCustomer(customer) {
         selectedCustomer = customer;
         searchInput.value = customer.searchKey || customer.SearchKey || "";
@@ -274,7 +279,7 @@
         document.getElementById("codBU").value = customer.codBU || customer.CodBU || "";
         document.getElementById("emailRSM").value = customer.emailResponsabileCommerciale || customer.EmailResponsabileCommerciale || "";
 
-        // Abilitazione dei controlli operativi
+        // RIMOSSO BLOCCO: Garantiamo che selectFornitore diventi reattivo ed editabile
         selectFornitore.disabled = false;
         inputTipologia.disabled = false;
         document.getElementById("gruppoCliente").disabled = false;
