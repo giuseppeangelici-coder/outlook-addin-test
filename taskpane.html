@@ -1,9 +1,11 @@
 <!-- 
   ADD-IN RICHIESTE RV - TASKPANE COMPONENT
-  Version: 1.2.0-Cascading
+  Version: 1.2.1-Cascading-Fix
   Date: 2026-07-13
-  Changes: Integrato doppio fetch parallelo (Clienti + Fornitori/Tipologie). 
-           Rimossi campi UI ridondanti. Gestione filtro bidirezionale Fornitore/Tipologia.
+  Changes: FIX campo corretto CodFornitore (era erroneamente CodiceFornitore in
+           popolaFornitoriUnivoci, aggiornaDatalistTipologie e nel listener input
+           su Tipologia). Questo causava il mancato popolamento della select Fornitore
+           e la mancata selezione automatica quando si allineava da Tipologia.
   Next Step: Gestione campi opzionali/obbligatori condizionali.
 -->
 <!DOCTYPE html>
@@ -61,7 +63,7 @@
   <label for="emailRSM">Email RSM (Destinatario CC)</label>
   <input type="text" id="emailRSM" readonly>
 
-  <!-- NUOVA SEZIONE: FORNITORE E TIPOLOGIA INTERVENTO -->
+  <!-- SEZIONE FORNITORE E TIPOLOGIA INTERVENTO -->
   <label for="selectFornitore">Fornitore</label>
   <select id="selectFornitore" disabled>
     <option value="">-- Seleziona o cerca per tipologia sotto --</option>
@@ -86,7 +88,7 @@
     // ----------------------------------------------------------------
     // VERSIONAMENTO E CONFIGURAZIONI DI TEST
     // ----------------------------------------------------------------
-    const APP_VERSION = "v1.2.0-Cascading";
+    const APP_VERSION = "v1.2.1-Cascading-Fix";
     const MASTER_USERS = ["g.angelici@partesa.it"];
 
     let fullDatabase = [];      
@@ -137,6 +139,11 @@
 
         log("Database clienti caricato (" + fullDatabase.length + " record).");
         log("Database fornitori caricato (" + fornitoreTipologiaDb.length + " record).");
+
+        // Diagnostica chiavi reali (utile se in futuro cambia ancora lo schema del JSON)
+        if (fornitoreTipologiaDb.length > 0) {
+          log("Chiavi rilevate in FornitoriTipologie.json: " + Object.keys(fornitoreTipologiaDb[0]).join(", "));
+        }
         
         applyRowLevelSecurity(userEmail);
         popolaFornitoriUnivoci();
@@ -169,12 +176,13 @@
       }
 
       // 4. POPOLAMENTO INIZIALE DEI FORNITORI (UNIVOCI)
+      // FIX: il campo si chiama CodFornitore (non CodiceFornitore)
       function popolaFornitoriUnivoci() {
         const selectFornitore = document.getElementById("selectFornitore");
         const fornitoriVisti = new Set();
 
         fornitoreTipologiaDb.forEach(item => {
-          const cod = item.CodiceFornitore;
+          const cod = item.CodFornitore;
           const ragSoc = item.RagioneSocialeFornitore;
           if (cod && !fornitoriVisti.has(cod)) {
             fornitoriVisti.add(cod);
@@ -208,8 +216,8 @@
         );
         
         if (match) {
-          // Normalizza i codici per il confronto per evitare mancate corrispondenze di stringa/numero
-          const targetCodice = String(match.CodiceFornitore).trim();
+          // FIX: CodFornitore (non CodiceFornitore) - normalizzato per il confronto
+          const targetCodice = String(match.CodFornitore).trim();
           
           // Forza la selezione del fornitore corrispondente nella select
           selectFornitore.value = targetCodice;
@@ -223,8 +231,9 @@
       function aggiornaDatalistTipologie(codFornitore = "") {
         listaTipologie.innerHTML = "";
         
+        // FIX: CodFornitore (non CodiceFornitore)
         const tipologieFiltrate = fornitoreTipologiaDb.filter(item => {
-          return codFornitore === "" || String(item.CodiceFornitore).trim() === String(codFornitore).trim();
+          return codFornitore === "" || String(item.CodFornitore).trim() === String(codFornitore).trim();
         });
 
         tipologieFiltrate.forEach(item => {
@@ -279,7 +288,6 @@
         document.getElementById("codBU").value = customer.codBU || customer.CodBU || "";
         document.getElementById("emailRSM").value = customer.emailResponsabileCommerciale || customer.EmailResponsabileCommerciale || "";
 
-        // RIMOSSO BLOCCO: Garantiamo che selectFornitore diventi reattivo ed editabile
         selectFornitore.disabled = false;
         inputTipologia.disabled = false;
         document.getElementById("gruppoCliente").disabled = false;
