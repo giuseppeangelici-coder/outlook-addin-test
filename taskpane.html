@@ -1,10 +1,10 @@
 <!-- 
   ADD-IN RICHIESTE RV - TASKPANE COMPONENT
-  Version: 1.5.0-Streamlined-Layout
+  Version: 1.6.0-Financial-Details
   Date: 2026-07-13
-  Changes: Raddrizzato e snellito il layout rimuovendo i campi di sola lettura (PdV, Ragione Sociale, BU, Email RSM).
-           I dati rimangono persistenti in memoria per la generazione dell'email.
-           Riordinati i campi secondo le specifiche di flusso.
+  Changes: Aggiunta sezione Dati Economici (Tipo Importo, Importo Reintegrato, Importo da Liquidare, Extra Non Coperto).
+           Aggiunto campo Note con obbligatorietà condizionata a Tipo Importo = "Variabile".
+           Inseriti i nuovi dati nel layout dell'email finale.
 -->
 <!DOCTYPE html>
 <html>
@@ -18,7 +18,8 @@
   #modeLabel, #userLabel { color: #666; margin-bottom: 8px; font-size: 11px; }
   #userLabel { font-weight: bold; color: #107c41; margin-bottom: 16px; }
   label { display: block; margin-top: 12px; font-weight: 600; }
-  input, select, button { width: 100%; padding: 6px; margin-top: 4px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 2px; }
+  input, select, button, textarea { width: 100%; padding: 6px; margin-top: 4px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 2px; font-family: inherit; }
+  textarea { resize: vertical; min-height: 50px; }
   button { margin-top: 20px; background: #0078d4; color: white; border: none; cursor: pointer; padding: 8px; font-weight: bold; }
   button:disabled { background: #ccc; cursor: not-allowed; }
   
@@ -34,7 +35,8 @@
   .suggestions-list li:hover { background: #f3f3f3; }
   
   #log { margin-top: 16px; padding: 8px; background: #f3f3f3; font-size: 11px; white-space: pre-wrap; min-height: 60px; border: 1px dashed #ccc; }
-  .sez-validita { margin-top: 12px; padding: 10px; background: #f9f9f9; display: none; }
+  .sez-validita, .sez-economica { margin-top: 12px; padding: 10px; background: #f9f9f9; }
+  .sez-validita { display: none; }
 </style>
 </head>
 <body>
@@ -140,19 +142,42 @@
     </select>
   </div>
 
+  <!-- SEZIONE DATI ECONOMICI & NOTE -->
+  <div id="sezioneEconomica" class="sez-economica" style="border-left: 3px solid #8660a9;">
+    <h3 style="margin: 0 0 10px 0; font-size: 13px; color: #8660a9;">Dati Economici & Note</h3>
+    
+    <label for="tipoImporto" style="margin-top: 0;">Tipo Importo</label>
+    <select id="tipoImporto" disabled>
+      <option value="Fisso">Fisso</option>
+      <option value="Variabile">Variabile</option>
+    </select>
+
+    <label for="importoReintegrato">Importo Reintegrato (€)</label>
+    <input type="number" id="importoReintegrato" step="0.01" min="0.01" placeholder="Valore maggiore di 0..." disabled>
+
+    <label for="importoLiquidare">Importo da Liquidare (€)</label>
+    <input type="number" id="importoLiquidare" step="0.01" min="0.01" placeholder="Valore maggiore di 0..." disabled>
+
+    <label for="importoExtra">Importo Extra Non Coperto (€)</label>
+    <input type="text" id="importoExtra" placeholder="Calcolato automaticamente..." readonly style="background: #f3f3f3; font-weight: bold; color: #d83b01;">
+
+    <label for="noteIntervento">Note <span id="reqNote" style="color: red; display: none;">(Obbligatorio per Variabile)</span></label>
+    <textarea id="noteIntervento" placeholder="Inserisci qui eventuali note o dettagli sull'intervento..." disabled></textarea>
+  </div>
+
   <button id="submitBtn" disabled>Genera Richiesta RV</button>
 
   <div id="log">Log eventi...</div>
 
   <script>
-    const APP_VERSION = "v1.5.0-Streamlined-Layout";
+    const APP_VERSION = "v1.6.0-Financial-Details";
     const MASTER_USERS = ["g.angelici@partesa.it"];
 
     let fullDatabase = [];      
     let filteredDatabase = [];  
     let fornitoreTipologiaDb = [];
     let budgetDb = [];
-    let selectedCustomer = null; // Contiene l'intero oggetto cliente selezionato
+    let selectedCustomer = null; 
     let highlightedIndex = -1;
     let calcoloPluriennaleOutput = ""; 
 
@@ -202,6 +227,7 @@
         popolaFornitoriUnivoci();
         popolaBudget();
         setupGestioneValidita();
+        setupLogicaEconomica();
 
       } catch (err) {
         log("ERRORE CARICAMENTO: " + err.message);
@@ -316,7 +342,7 @@
           dataInizioAnnuale.min = `${anno}-01-01`; dataInizioAnnuale.max = `${anno}-12-31`;
           dataFineAnnuale.min = `${anno}-01-01`; dataFineAnnuale.max = `${anno}-12-31`;
           if (dataInizioAnnuale.value && !dataInizioAnnuale.value.startsWith(anno)) dataInizioAnnuale.value = "";
-          if (dataFineAnnuale.value && !dataFineAnnuale.value.startsWith(anno)) dataFineAnnuale.value = "";
+          if (dataFineAnnuale.value && !dataFineAnnuale.value.startsWith(anno)) dataFineFineAnnuale.value = "";
         }
         annoAnnuale.addEventListener("change", allineaVincoliAnnoAnnuale);
 
@@ -371,6 +397,37 @@
 
         dataInizioPluri.addEventListener("change", eseguiCalcoloPluriennale);
         dataFinePluri.addEventListener("change", eseguiCalcoloPluriennale);
+      }
+
+      function setupLogicaEconomica() {
+        const tipoImporto = document.getElementById("tipoImporto");
+        const reqNote = document.getElementById("reqNote");
+        const impReintegrato = document.getElementById("importoReintegrato");
+        const impLiquidare = document.getElementById("importoLiquidare");
+        const impExtra = document.getElementById("importoExtra");
+
+        tipoImporto.addEventListener("change", () => {
+          if (tipoImporto.value === "Variabile") {
+            reqNote.style.display = "inline";
+          } else {
+            reqNote.style.display = "none";
+          }
+        });
+
+        function rinfrescaCalcoloExtra() {
+          const r = parseFloat(impReintegrato.value);
+          const l = parseFloat(impLiquidare.value);
+
+          if (!isNaN(r) && !isNaN(l) && l > r) {
+            const diff = l - r;
+            impExtra.value = diff.toFixed(2) + " €";
+          } else {
+            impExtra.value = ""; 
+          }
+        }
+
+        impReintegrato.addEventListener("input", rinfrescaCalcoloExtra);
+        impLiquidare.addEventListener("input", rinfrescaCalcoloExtra);
       }
 
       // FILTRI CASCADING FORNITORI / TIPOLOGIE
@@ -470,18 +527,24 @@
       function selectCustomer(customer) {
         suggestionsList.style.display = "none";
         highlightedIndex = -1;
-        selectedCustomer = customer; // Salviamo l'intero record
+        selectedCustomer = customer; 
         searchInput.value = customer.searchKey || customer.SearchKey || "";
         
-        // Sblocco dei controlli successivi
+        // Sblocco dei controlli successivi e della sezione economica
         document.getElementById("selectBudget").disabled = false;
         document.getElementById("selectValidita").disabled = false;
         selectFornitore.disabled = false;
         inputTipologia.disabled = false;
         document.getElementById("gruppoCliente").disabled = false;
+        
+        document.getElementById("tipoImporto").disabled = false;
+        document.getElementById("importoReintegrato").disabled = false;
+        document.getElementById("importoLiquidare").disabled = false;
+        document.getElementById("noteIntervento").disabled = false;
+        
         submitBtn.disabled = false;
 
-        log("Cliente " + (customer.codPdV || customer.CodPdV) + " agganciato in memoria.");
+        log("Cliente " + (customer.codPdV || customer.CodPdV) + " agganciato in memoria. Sezione economica attiva.");
       }
 
       // SUBMIT E GENERAZIONE EMAIL
@@ -526,6 +589,33 @@
           stringaDettaglioValidita = `Una tantum / Spot - Mese liquidazione: ${mScelto} 2026`;
         }
 
+        // VERIFICHE E VALIDAZIONI ECONOMICHE
+        const tImporto = document.getElementById("tipoImporto").value;
+        const valReintegrato = parseFloat(document.getElementById("importoReintegrato").value);
+        const valLiquidare = parseFloat(document.getElementById("importoLiquidare").value);
+        const txtNote = document.getElementById("noteIntervento").value.trim();
+
+        if (isNaN(valReintegrato) || valReintegrato <= 0) {
+          alert("Errore: L'Importo Reintegrato deve essere compilato e maggiore di 0.");
+          return;
+        }
+
+        if (isNaN(valLiquidare) || valLiquidare <= 0) {
+          alert("Errore: L'Importo da Liquidare deve essere compilato e maggiore di 0.");
+          return;
+        }
+
+        if (tImporto === "Variabile" && txtNote === "") {
+          alert("Errore: Il campo Note è obbligatorio quando il tipo di importo è Variabile.");
+          return;
+        }
+
+        // Calcolo extra per il corpo email
+        let txtExtra = "Nessuno";
+        if (valLiquidare > valReintegrato) {
+          txtExtra = (valLiquidare - valReintegrato).toFixed(2) + " €";
+        }
+
         // Recupero i dati dal record nascosto in memoria
         const cPdv = selectedCustomer.codPdV || selectedCustomer.CodPdV || "";
         const cRag = selectedCustomer.ragioneSociale || selectedCustomer.RagioneSociale || "";
@@ -557,6 +647,13 @@
                 <tr><td>Quantità Stima</td><td>${qStimaText}</td></tr>
                 <tr><td>Unità di Misura</td><td>${udmText}</td></tr>
                 <tr><td><b>Periodo Validità</b></td><td><span style="color:#d83b01;"><b>${stringaDettaglioValidita}</b></span></td></tr>
+                <tr style="background-color: #f9f9f9;"><td colspan="2"><b>DETTAGLI ECONOMICI</b></td></tr>
+                <tr><td>Tipo Importo</td><td>${tImporto}</td></tr>
+                <tr><td>Importo Reintegrato</td><td>${valReintegrato.toFixed(2)} €</td></tr>
+                <tr><td>Importo da Liquidare</td><td>${valLiquidare.toFixed(2)} €</td></tr>
+                <tr><td>Importo Extra Non Coperto</td><td><span style="color:#d83b01; font-weight:bold;">${txtExtra}</span></td></tr>
+                <tr><td>Note / Giustificativo</td><td>${txtNote ? txtNote : "Nessuna nota inserita"}</td></tr>
+                <tr style="background-color: #f9f9f9;"><td colspan="2"></td></tr>
                 <tr><td>Venditore</td><td>${cVen}</td></tr>
               </table>
               <p style="font-size: 11px; color: #666;">Generato tramite Outlook Add-in ${APP_VERSION}</p>
@@ -567,7 +664,7 @@
         const messageFormOptions = {
           subject: "Richiesta RV - " + cPdv + " - " + cRag,
           htmlBody: htmlBody,
-          cc: cEmailRsm ? [cEmailRsm] : [] // Inserito dinamicamente se presente nel database
+          cc: cEmailRsm ? [cEmailRsm] : []
         };
 
         if (mode === "attach" && Office.context.mailbox.item && Office.context.mailbox.item.itemId) {
