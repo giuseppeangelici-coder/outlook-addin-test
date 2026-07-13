@@ -391,6 +391,8 @@
         suggestionsList.innerHTML = "";
         
         document.getElementById("selectBudget").disabled = false;
+        document.getElementById("quantitaStima").disabled = true;
+        document.getElementById("unitaMisura").disabled = true;
         document.getElementById("codPdV").value = customer.codPdV || customer.CodPdV || "";
         document.getElementById("ragioneSociale").value = customer.ragioneSociale || customer.RagioneSociale || "";
         document.getElementById("codBU").value = customer.codBU || customer.CodBU || "";
