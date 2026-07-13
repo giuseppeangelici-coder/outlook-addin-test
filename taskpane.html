@@ -218,7 +218,7 @@
       function aggiornaDatalistTipologie(codFornitore = "") {
         listaTipologie.innerHTML = "";
         
-        const tipologie Filtrate = fornitoreTipologiaDb.filter(item => {
+        const tipologieFiltrate = fornitoreTipologiaDb.filter(item => {
           return codFornitore === "" || item.CodiceFornitore === codFornitore;
         });
 
