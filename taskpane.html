@@ -174,15 +174,7 @@
           log("Chiavi rilevate in FornitoriTipologie.json: " + Object.keys(fornitoreTipologiaDb[0]).join(", "));
         }
 
-        applyRowLevelSecurity(userEmail);
-        popolaFornitoriUnivoci();
-        popolaBudget();
 
-        log("Fornitori caricati nella select: " + document.getElementById("selectFornitore").options.length);
-
-      } catch (err) {
-        log("ERRORE CARICAMENTO: " + err.message);
-      }
 
       // 3. ROW-LEVEL SECURITY (RLS)
       function applyRowLevelSecurity(email) {
