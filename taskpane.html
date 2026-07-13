@@ -1,9 +1,10 @@
 <!-- 
   ADD-IN RICHIESTE RV - TASKPANE COMPONENT
-  Version: 1.1.0-UI-Light
+  Version: 1.2.0-Cascading
   Date: 2026-07-13
-  Changes: Rimossi campi UI ridondanti (Venditore, RV, RSM). Dati mantenuti in memoria.
-  Next Step: Implementazione cascading dropdowns.
+  Changes: Integrato doppio fetch parallelo (Clienti + Fornitori/Tipologie). 
+           Rimossi campi UI ridondanti. Gestione filtro bidirezionale Fornitore/Tipologia.
+  Next Step: Gestione campi opzionali/obbligatori condizionali.
 -->
 <!DOCTYPE html>
 <html>
@@ -19,7 +20,7 @@
   label { display: block; margin-top: 12px; font-weight: 600; }
   input, select, button { width: 100%; padding: 6px; margin-top: 4px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 2px; }
   input[readonly] { background-color: #f3f3f3; color: #666; cursor: not-allowed; }
-  button { margin-top: 16px; background: #0078d4; color: white; border: none; cursor: pointer; padding: 8px; font-weight: bold; }
+  button { margin-top: 20px; background: #0078d4; color: white; border: none; cursor: pointer; padding: 8px; font-weight: bold; }
   button:disabled { background: #ccc; cursor: not-allowed; }
   
   .search-container { position: relative; }
@@ -60,7 +61,17 @@
   <label for="emailRSM">Email RSM (Destinatario CC)</label>
   <input type="text" id="emailRSM" readonly>
 
-  <!-- SPAZIO FUTURO PER CASCADING DROPDOWNS -->
+  <!-- NUOVA SEZIONE: FORNITORE E TIPOLOGIA INTERVENTO -->
+  <label for="selectFornitore">Fornitore</label>
+  <select id="selectFornitore" disabled>
+    <option value="">-- Seleziona o cerca per tipologia sotto --</option>
+  </select>
+
+  <label for="inputTipologia">Tipologia Intervento (Cerca linea/prodotto)</label>
+  <input type="text" id="inputTipologia" list="listaTipologie" placeholder="Seleziona prima il fornitore o digita qui..." disabled>
+  <datalist id="listaTipologie"></datalist>
+
+  <!-- CAMPO GRUPPO -->
   <label for="gruppoCliente">Gruppo?</label>
   <select id="gruppoCliente" disabled>
     <option value="No">No</option>
@@ -72,11 +83,15 @@
   <div id="log">Log eventi...</div>
 
   <script>
-    // Configurazione Utenti Master (RLS)
+    // ----------------------------------------------------------------
+    // VERSIONAMENTO E CONFIGURAZIONI DI TEST
+    // ----------------------------------------------------------------
+    const APP_VERSION = "v1.2.0-Cascading";
     const MASTER_USERS = ["g.angelici@partesa.it"];
 
     let fullDatabase = [];      
     let filteredDatabase = [];  
+    let fornitoreTipologiaDb = [];
     let selectedCustomer = null;
 
     function log(msg) {
@@ -89,15 +104,9 @@
       const params = new URLSearchParams(window.location.search);
       const mode = params.get("mode") || "general";
       
-      // Personalizzazione testo del bottone principale in base al contesto
       const submitBtn = document.getElementById("submitBtn");
-      if (mode === "attach") {
-        submitBtn.textContent = "Allega e Invia Richiesta RV";
-      } else {
-        submitBtn.textContent = "Apri e Invia Richiesta RV";
-      }
-      
-      document.getElementById("modeLabel").textContent = "Modalità: " + mode + " | Host: " + info.host;
+      submitBtn.textContent = mode === "attach" ? "Allega e Invia Richiesta RV" : "Apri e Invia Richiesta RV";
+      document.getElementById("modeLabel").textContent = "Versione: " + APP_VERSION + " | Modalità: " + mode + " | Host: " + info.host;
 
       // 1. IDENTIFICAZIONE UTENTE
       let userEmail = "";
@@ -108,64 +117,122 @@
       }
       document.getElementById("userLabel").textContent = "Utente: " + userEmail;
 
-      // 2. RECUPERO JSON DA GITHUB
-      const url = "https://giuseppeangelici-coder.github.io/outlook-addin-test/QryCustomerMaster.json";
-      log("Avvio caricamento anagrafica da: " + url);
+      // 2. FETCH PARALLELO DEI DUE FILE JSON DA GITHUB
+      const urlClienti = "https://giuseppeangelici-coder.github.io/outlook-addin-test/QryCustomerMaster.json";
+      const urlFornitori = "https://giuseppeangelici-coder.github.io/outlook-addin-test/FornitoriTipologie.json";
+      
+      log("Avvio scaricamento database...");
       
       try {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error("Status HTTP " + res.status);
-        fullDatabase = await res.json();
-        log("Anagrafica scaricata. Record totali: " + fullDatabase.length);
+        const [resClienti, resFornitori] = await Promise.all([
+          fetch(urlClienti),
+          fetch(urlFornitori)
+        ]);
+
+        if (!resClienti.ok) throw new Error("Errore database clienti: " + resClienti.status);
+        if (!resFornitori.ok) throw new Error("Errore database fornitori: " + resFornitori.status);
+
+        fullDatabase = await resClienti.json();
+        fornitoreTipologiaDb = await resFornitori.json();
+
+        log("Database clienti caricato (" + fullDatabase.length + " record).");
+        log("Database fornitori caricato (" + fornitoreTipologiaDb.length + " record).");
         
         applyRowLevelSecurity(userEmail);
+        popolaFornitoriUnivoci();
 
       } catch (err) {
-        log("ERRORE: " + err.message);
+        log("ERRORE CARICAMENTO: " + err.message);
       }
 
-      // 3. LOGICA ROW-LEVEL SECURITY (RLS)
+      // 3. ROW-LEVEL SECURITY (RLS)
       function applyRowLevelSecurity(email) {
         const isMaster = MASTER_USERS.map(e => e.toLowerCase()).includes(email);
-        
         if (isMaster) {
           filteredDatabase = fullDatabase;
-          log("Profilo: MASTER DETECTED. Visibilità completa (" + filteredDatabase.length + " record).");
-        } 
-        else if (fullDatabase.some(c => {
-          const ev = c.emailResponsabileVendite || c.EmailResponsabileVendite || "";
-          return ev.toLowerCase() === email;
-        })) {
-          filteredDatabase = fullDatabase.filter(c => {
-            const ev = c.emailResponsabileVendite || c.EmailResponsabileVendite || "";
-            return ev.toLowerCase() === email;
-          });
-          log("Profilo: RV DETECTED. Record associati: " + filteredDatabase.length);
-        } 
-        else if (fullDatabase.some(c => {
-          const ec = c.emailResponsabileCommerciale || c.EmailResponsabileCommerciale || "";
-          return ec.toLowerCase() === email;
-        })) {
-          filteredDatabase = fullDatabase.filter(c => {
-            const ec = c.emailResponsabileCommerciale || c.EmailResponsabileCommerciale || "";
-            return ec.toLowerCase() === email;
-          });
-          log("Profilo: RSM DETECTED. Record associati all'area: " + filteredDatabase.length);
-        } 
-        else {
+          log("Profilo: MASTER DETECTED. Visibilità completa.");
+        } else if (fullDatabase.some(c => (c.emailResponsabileVendite || c.EmailResponsabileVendite || "").toLowerCase() === email)) {
+          filteredDatabase = fullDatabase.filter(c => (c.emailResponsabileVendite || c.EmailResponsabileVendite || "").toLowerCase() === email);
+          log("Profilo: RV DETECTED. Record: " + filteredDatabase.length);
+        } else if (fullDatabase.some(c => (c.emailResponsabileCommerciale || c.EmailResponsabileCommerciale || "").toLowerCase() === email)) {
+          filteredDatabase = fullDatabase.filter(c => (c.emailResponsabileCommerciale || c.EmailResponsabileCommerciale || "").toLowerCase() === email);
+          log("Profilo: RSM DETECTED. Record: " + filteredDatabase.length);
+        } else {
           filteredDatabase = fullDatabase; 
-          log("Email non in anagrafica. Modalità provvisoria di test: sbloccati tutti i record.");
+          log("Email non in anagrafica. Modalità provvisoria di test attiva.");
         }
 
         if (filteredDatabase.length > 0) {
           document.getElementById("searchCliente").disabled = false;
           document.getElementById("searchCliente").placeholder = "Cerca per Codice o Nome...";
-        } else {
-          document.getElementById("searchCliente").placeholder = "Nessun cliente disponibile.";
         }
       }
 
-      // 4. AUTOCOMPLETE
+      // 4. POPOLAMENTO INIZIALE DEI FORNITORI (UNIVOCI)
+      function popolaFornitoriUnivoci() {
+        const selectFornitore = document.getElementById("selectFornitore");
+        const fornitoriVisti = new Set();
+
+        fornitoreTipologiaDb.forEach(item => {
+          const cod = item.CodiceFornitore;
+          const ragSoc = item.RagioneSocialeFornitore;
+          if (cod && !fornitoriVisti.has(cod)) {
+            fornitoriVisti.add(cod);
+            const opt = document.createElement("option");
+            opt.value = cod;
+            opt.textContent = ragSoc;
+            selectFornitore.appendChild(opt);
+          }
+        });
+      }
+
+      // 5. GESTIONE DEI FILTRI INCROCIATI (CASCADING BIDIREZIONALE)
+      const selectFornitore = document.getElementById("selectFornitore");
+      const inputTipologia = document.getElementById("inputTipologia");
+      const listaTipologie = document.getElementById("listaTipologie");
+
+      // Verso A: Cambia il fornitore -> Filtra l'elenco tipologie disponibili
+      selectFornitore.addEventListener("change", () => {
+        const codFornitoreSelezionato = selectFornitore.value;
+        inputTipologia.value = ""; // Reset tipologia precedente
+        aggiornaDatalistTipologie(codFornitoreSelezionato);
+      });
+
+      // Verso B: L'utente scrive o seleziona una tipologia -> Se trova match univoco, assegna il fornitore
+      inputTipologia.addEventListener("input", () => {
+        const valoreDigitato = inputTipologia.value.trim();
+        
+        // Verifica se il valore inserito corrisponde esattamente a una delle tipologie nel db
+        const match = fornitoreTipologiaDb.find(item => item.TipologiaIntervento === valoreDigitato);
+        
+        if (match) {
+          // Se il fornitore non era selezionato o era diverso, lo allinea automaticamente
+          if (selectFornitore.value !== match.CodiceFornitore) {
+            selectFornitore.value = match.CodiceFornitore;
+            aggiornaDatalistTipologie(match.CodiceFornitore);
+            log("Fornitore allineato automaticamente a: " + match.RagioneSocialeFornitore);
+          }
+        }
+      });
+
+      function aggiornaDatalistTipologie(codFornitore = "") {
+        listaTipologie.innerHTML = "";
+        
+        const tipologie Filtrate = fornitoreTipologiaDb.filter(item => {
+          return codFornitore === "" || item.CodiceFornitore === codFornitore;
+        });
+
+        tipologieFiltrate.forEach(item => {
+          const opt = document.createElement("option");
+          opt.value = item.TipologiaIntervento; 
+          listaTipologie.appendChild(opt);
+        });
+      }
+
+      // Al caricamento iniziale prepariamo la lista completa di tutte le tipologie
+      aggiornaDatalistTipologie();
+
+      // 6. AUTOCOMPLETE CLIENTE
       const searchInput = document.getElementById("searchCliente");
       const suggestionsList = document.getElementById("suggestions");
 
@@ -173,19 +240,18 @@
         const query = e.target.value.toLowerCase().trim();
         suggestionsList.innerHTML = "";
         suggestionsList.style.display = "none";
-
         if (query.length < 2) return;
 
         const filtered = filteredDatabase.filter(c => {
-          const chiaveRicerca = c.searchKey || c.SearchKey || "";
-          return chiaveRicerca.toLowerCase().includes(query);
+          const chiave = c.searchKey || c.SearchKey || "";
+          return chiave.toLowerCase().includes(query);
         }).slice(0, 10);
 
         if (filtered.length > 0) {
           suggestionsList.style.display = "block";
           filtered.forEach(c => {
             const li = document.createElement("li");
-            li.textContent = c.searchKey || c.SearchKey || "Dato mancante";
+            li.textContent = c.searchKey || c.SearchKey || "";
             li.addEventListener("click", () => selectCustomer(c));
             suggestionsList.appendChild(li);
           });
@@ -196,7 +262,7 @@
         if (e.target !== searchInput) suggestionsList.style.display = "none";
       });
 
-      // 5. SELEZIONE CLIENTE (I dati nascosti rimangono in memoria nell'oggetto customer)
+      // 7. SELEZIONE CLIENTE -> SBLOCCO CAMPI SUCCESSIVI
       function selectCustomer(customer) {
         selectedCustomer = customer;
         searchInput.value = customer.searchKey || customer.SearchKey || "";
@@ -208,29 +274,31 @@
         document.getElementById("codBU").value = customer.codBU || customer.CodBU || "";
         document.getElementById("emailRSM").value = customer.emailResponsabileCommerciale || customer.EmailResponsabileCommerciale || "";
 
+        // Abilitazione dei controlli operativi
+        selectFornitore.disabled = false;
+        inputTipologia.disabled = false;
         document.getElementById("gruppoCliente").disabled = false;
-
-        const checkRSM = customer.CheckRSM || "Mancante";
-        const checkRV = customer.CheckRV || "Mancante";
-        log("Selezionato PdV: " + (customer.codPdV || customer.CodPdV) + " | Validità - RSM: " + checkRSM + ", RV: " + checkRV);
-
         submitBtn.disabled = false;
+
+        log("Cliente Selezionato: " + (customer.codPdV || customer.CodPdV));
       }
 
-      // 6. GENERAZIONE EMAIL CON RECUPERO IN MEMORIA DEL VENDITORE
+      // 8. GENERAZIONE EMAIL HTML
       submitBtn.addEventListener("click", () => {
         if (!selectedCustomer) return;
 
-        const gruppoScelto = document.getElementById("gruppoCliente").value;
         const cPdv = selectedCustomer.codPdV || selectedCustomer.CodPdV || "";
         const cRag = selectedCustomer.ragioneSociale || selectedCustomer.RagioneSociale || "";
         const cBu = selectedCustomer.codBU || selectedCustomer.CodBU || "";
-        
-        // Estrazione in background dei dati non visibili a terminale
         const cVen = selectedCustomer.venditore || selectedCustomer.Venditore || "N/D";
         const cEmailRsm = selectedCustomer.emailResponsabileCommerciale || selectedCustomer.EmailResponsabileCommerciale || "";
-        const checkRSM = selectedCustomer.CheckRSM || "N/A";
-        const checkRV = selectedCustomer.CheckRV || "N/A";
+        
+        const gruppoScelto = document.getElementById("gruppoCliente").value;
+        const tipologiaScelta = inputTipologia.value.trim() || "Non specificata";
+        
+        // Recupero il nome testuale del fornitore selezionato
+        const fornitoreOpt = selectFornitore.options[selectFornitore.selectedIndex];
+        const fornitoreScelto = fornitoreOpt ? fornitoreOpt.textContent : "Non specificato";
 
         const htmlBody = `
           <html>
@@ -242,9 +310,11 @@
                 <tr><td>Ragione Sociale</td><td>${cRag}</td></tr>
                 <tr><td>Business Unit</td><td>${cBu}</td></tr>
                 <tr><td>Gruppo</td><td><b>${gruppoScelto}</b></td></tr>
+                <tr><td>Fornitore Selezionato</td><td>${fornitoreScelto}</td></tr>
+                <tr><td>Tipologia Intervento</td><td>${tipologiaScelta}</td></tr>
                 <tr><td>Venditore</td><td>${cVen}</td></tr>
               </table>
-              <p style="font-size: 11px; color: #666;">Stato controlli interni al caricamento: CheckRV=${checkRV} | CheckRSM=${checkRSM}</p>
+              <p style="font-size: 11px; color: #666;">Generato tramite Outlook Add-in ${APP_VERSION}</p>
             </body>
           </html>
         `;
@@ -255,7 +325,6 @@
           cc: [cEmailRsm]
         };
 
-        // Gestione condizionale dell'allegato se siamo in modalità "attach"
         if (mode === "attach" && Office.context.mailbox.item && Office.context.mailbox.item.itemId) {
           messageFormOptions.attachments = [{
             type: "item",
@@ -265,7 +334,7 @@
         }
 
         Office.context.mailbox.displayNewMessageForm(messageFormOptions);
-        log("Finestra email creata con successo.");
+        log("Finestra email creata.");
       });
     });
   </script>
