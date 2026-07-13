@@ -84,6 +84,20 @@
     <option value="Sì">Sì</option>
   </select>
 
+  <!-- SEZIONE CONDIZIONALE: STIMA BUDGET (Visibile solo se ObbligoStima = VERO) -->
+  <div id="sezioneStima" style="display: none; margin-top: 12px; padding: 10px; background: #f9f9f9; border-left: 3px solid #0078d4;">
+    <label for="quantitaStima" style="margin-top: 0;">Quantità Stima (Intero)</label>
+    <input type="number" id="quantitaStima" step="1" min="1" placeholder="Inserisci quantità numerica...">
+
+    <label for="unitaMisura" style="margin-top: 10px;">Unità di Misura</label>
+    <select id="unitaMisura">
+      <option value="">-- Seleziona UDM --</option>
+      <option value="PEZZI">PEZZI</option>
+      <option value="COLLI">COLLI</option>
+      <option value="HL">HL</option>
+    </select>
+  </div>
+
   <button id="submitBtn" disabled>Genera Richiesta RV</button>
 
   <div id="log">Log eventi...</div>
@@ -100,6 +114,42 @@
     let fornitoreTipologiaDb = [];
     let selectedCustomer = null;
     let highlightedIndex = -1;
+    // Sotto le altre variabili globali
+    let budgetDb = [];
+
+    // Dentro Office.onReady, aggiorna il blocco dei fetch:
+    const urlClienti = "https://giuseppeangelici-coder.github.io/outlook-addin-test/QryCustomerMaster.json";
+    const urlFornitori = "https://giuseppeangelici-coder.github.io/outlook-addin-test/FornitoriTipologie.json";
+    const urlBudget = "https://giuseppeangelici-coder.github.io/outlook-addin-test/Budget.json";
+    
+    log("Avvio scaricamento database...");
+    
+    try {
+      const [resClienti, resFornitori, resBudget] = await Promise.all([
+        fetch(urlClienti),
+        fetch(urlFornitori),
+        fetch(urlBudget)
+      ]);
+
+      if (!resClienti.ok) throw new Error("Errore database clienti: " + resClienti.status);
+      if (!resFornitori.ok) throw new Error("Errore database fornitori: " + resFornitori.status);
+      if (!resBudget.ok) throw new Error("Errore database budget: " + resBudget.status);
+
+      fullDatabase = await resClienti.json();
+      fornitoreTipologiaDb = await resFornitori.json();
+      budgetDb = await resBudget.json();
+
+      log("Database clienti caricato (" + fullDatabase.length + " record).");
+      log("Database fornitori caricato (" + fornitoreTipologiaDb.length + " record).");
+      log("Database budget caricato (" + budgetDb.length + " record).");
+      
+      applyRowLevelSecurity(userEmail);
+      popolaFornitoriUnivoci();
+      popolaBudget(); // Da implementare sotto
+
+    } catch (err) {
+      log("ERRORE CARICAMENTO: " + err.message);
+    }
 
     function log(msg) {
       const el = document.getElementById("log");
@@ -202,6 +252,49 @@
           }
         });
       }
+
+      // Sotto la funzione popolaFornitoriUnivoci()
+    function popolaBudget() {
+      // Nota: Assicurati di avere un elemento <select id="selectBudget"> nella tua UI attuale
+      const selectBudget = document.getElementById("selectBudget");
+      if (!selectBudget) return;
+      
+      budgetDb.forEach(item => {
+        if (item.Budget) {
+          const opt = document.createElement("option");
+          opt.value = item.Budget;
+          opt.textContent = item.Budget;
+          selectBudget.appendChild(opt);
+        }
+      });
+
+      // Ascolta il cambio di selezione del Budget
+      selectBudget.addEventListener("change", () => {
+        const budgetSelezionato = selectBudget.value;
+        const match = budgetDb.find(b => b.Budget === budgetSelezionato);
+        
+        const sezioneStima = document.getElementById("sezioneStima");
+        const quantitaStima = document.getElementById("quantitaStima");
+        const unitaMisura = document.getElementById("unitaMisura");
+
+        // Gestione flessibile del booleano (sia stringa "VERO"/"true" sia booleano nativo)
+        const obbligoStima = match && (match.ObbligoStima === true || String(match.ObbligoStima).toLowerCase() === "vero" || String(match.ObbligoStima).toLowerCase() === "true");
+
+        if (obbligoStima) {
+          sezioneStima.style.display = "block";
+          quantitaStima.required = true;
+          unitaMisura.required = true;
+          log("Rilevato Obbligo Stima: Campi abilitati e obbligatori.");
+        } else {
+          sezioneStima.style.display = "none";
+          quantitaStima.required = false;
+          unitaMisura.required = false;
+          quantitaStima.value = "";
+          unitaMisura.value = "";
+          log("Obbligo Stima non richiesto.");
+        }
+      });
+    }
 
       // 5. GESTIONE DEI FILTRI INCROCIATI (CASCADING BIDIREZIONALE CORRETTO)
       const selectFornitore = document.getElementById("selectFornitore");
@@ -413,12 +506,25 @@ highlightedIndex = -1;
       // 8. GENERAZIONE EMAIL HTML
       submitBtn.addEventListener("click", () => {
         if (!selectedCustomer) return;
+        // Controllo validazione condizionale
+        const quantitaStima = document.getElementById("quantitaStima");
+        const unitaMisura = document.getElementById("unitaMisura");
+        if (quantitaStima.required) {
+          const qVal = parseInt(quantitaStima.value, 10);
+          if (isNaN(qVal) || qVal <= 0 || !unitaMisura.value) {
+            alert("Errore: Valorizzare correttamente Quantità Stima (intero) e Unità di Misura.");
+            return;
+          }
+        }
 
         const cPdv = selectedCustomer.codPdV || selectedCustomer.CodPdV || "";
         const cRag = selectedCustomer.ragioneSociale || selectedCustomer.RagioneSociale || "";
         const cBu = selectedCustomer.codBU || selectedCustomer.CodBU || "";
         const cVen = selectedCustomer.venditore || selectedCustomer.Venditore || "N/D";
         const cEmailRsm = selectedCustomer.emailResponsabileCommerciale || selectedCustomer.EmailResponsabileCommerciale || "";
+        const budgetScelto = document.getElementById("selectBudget").value || "N/D";
+        const qStimaText = quantitaStima.required ? quantitaStima.value : "Non richiesta";
+        const udmText = quantitaStima.required ? unitaMisura.value : "Non richiesta";
         
         const gruppoScelto = document.getElementById("gruppoCliente").value;
         const tipologiaScelta = inputTipologia.value.trim() || "Non specificata";
