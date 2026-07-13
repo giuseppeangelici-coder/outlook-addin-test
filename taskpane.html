@@ -1,10 +1,13 @@
 <!-- 
   ADD-IN RICHIESTE RV - TASKPANE COMPONENT
-  Version: 1.6.0-Financial-Details
+  Version: 1.7.0-Simplified-Pluriennale
   Date: 2026-07-13
-  Changes: Aggiunta sezione Dati Economici (Tipo Importo, Importo Reintegrato, Importo da Liquidare, Extra Non Coperto).
-           Aggiunto campo Note con obbligatorietà condizionata a Tipo Importo = "Variabile".
-           Inseriti i nuovi dati nel layout dell'email finale.
+  Changes: Semplificata la gestione Pluriennale secondo feedback:
+           - Inizio: Mese dell'anno corrente (2026).
+           - Fine: Solo selezione dell'Anno.
+           - Eliminato calcolo pro-rata automatico in giorni.
+           - Aggiunto box di avviso/promemoria dinamico.
+           - Campo Note obbligatorio se viene scelto il Pluriennale.
 -->
 <!DOCTYPE html>
 <html>
@@ -37,6 +40,8 @@
   #log { margin-top: 16px; padding: 8px; background: #f3f3f3; font-size: 11px; white-space: pre-wrap; min-height: 60px; border: 1px dashed #ccc; }
   .sez-validita, .sez-economica { margin-top: 12px; padding: 10px; background: #f9f9f9; }
   .sez-validita { display: none; }
+  
+  .box-avviso { background: #fffdf4; border: 1px solid #ffb900; padding: 8px; border-radius: 2px; margin-top: 10px; font-size: 11px; color: #7a5300; line-height: 1.4; }
 </style>
 </head>
 <body>
@@ -75,7 +80,7 @@
   <select id="selectValidita" disabled>
     <option value="">-- Seleziona Tipo Validità --</option>
     <option value="annuale">1. Intervento Annuale</option>
-    <option value="pluriennale">2. Pluriennale (Ripartizione Auto)</option>
+    <option value="pluriennale">2. Pluriennale (Ripartizione Manuale)</option>
     <option value="spot">3. Una tantum / Spot</option>
   </select>
 
@@ -92,14 +97,39 @@
     <input type="date" id="dataFineAnnuale">
   </div>
 
-  <!-- SUB-SEZIONE 2: PLURIENNALE -->
+  <!-- SUB-SEZIONE 2: PLURIENNALE (AGGIORNATA) -->
   <div id="sezPluriennale" class="sez-validita" style="border-left: 3px solid #d83b01;">
-    <label for="dataInizioPluri" style="margin-top: 0;">Data Inizio Libera</label>
-    <input type="date" id="dataInizioPluri">
-    <label for="dataFinePluri">Data Fine Libera</label>
-    <input type="date" id="dataFinePluri">
-    <div id="ripartizioneAutomaticaAnni" style="margin-top: 12px; font-size: 12px; background: #fff; padding: 8px; border: 1px solid #ddd; border-radius: 2px;">
-      Nessun periodo calcolato. Inserisci le date sopra.
+    <label for="meseInizioPluri" style="margin-top: 0;">Mese Partenza (Anno Corrente 2026)</label>
+    <select id="meseInizioPluri">
+      <option value="">-- Seleziona Mese Partenza --</option>
+      <option value="Gennaio">Gennaio</option>
+      <option value="Febbraio">Febbraio</option>
+      <option value="Marzo">Marzo</option>
+      <option value="Aprile">Aprile</option>
+      <option value="Maggio">Maggio</option>
+      <option value="Giugno">Giugno</option>
+      <option value="Luglio">Luglio</option>
+      <option value="Agosto">Agosto</option>
+      <option value="Settembre">Settembre</option>
+      <option value="Ottobre">Ottobre</option>
+      <option value="Novembre">Novembre</option>
+      <option value="Dicembre">Dicembre</option>
+    </select>
+
+    <label for="annoFinePluri">Anno Fine Validità</label>
+    <select id="annoFinePluri">
+      <option value="">-- Seleziona Anno Scadenza --</option>
+      <option value="2026">2026</option>
+      <option value="2027">2027</option>
+      <option value="2028">2028</option>
+      <option value="2029">2029</option>
+      <option value="2030">2030</option>
+    </select>
+
+    <div class="box-avviso">
+      <strong>⚠️ NOTA PER LA COMPILAZIONE:</strong><br>
+      Nel caso di contratti pluriennali, è obbligatorio specificare nel campo <strong>NOTE</strong> (in fondo) come distribuire l'importo totale negli anni.<br>
+      <em>Es: 2026 -> 2.000€; 2027 -> 4.000€; 2028 -> 4.000€</em>
     </div>
   </div>
 
@@ -161,8 +191,8 @@
     <label for="importoExtra">Importo Extra Non Coperto (€)</label>
     <input type="text" id="importoExtra" placeholder="Calcolato automaticamente..." readonly style="background: #f3f3f3; font-weight: bold; color: #d83b01;">
 
-    <label for="noteIntervento">Note <span id="reqNote" style="color: red; display: none;">(Obbligatorio per Variabile)</span></label>
-    <textarea id="noteIntervento" placeholder="Inserisci qui eventuali note o dettagli sull'intervento..." disabled></textarea>
+    <label for="noteIntervento">Note <span id="reqNote" style="color: red; display: none;">(Obbligatorio)</span></label>
+    <textarea id="noteIntervento" placeholder="Inserisci qui eventuali note, dettagli o la ripartizione pluriennale..." disabled></textarea>
   </div>
 
   <button id="submitBtn" disabled>Genera Richiesta RV</button>
@@ -170,7 +200,7 @@
   <div id="log">Log eventi...</div>
 
   <script>
-    const APP_VERSION = "v1.6.0-Financial-Details";
+    const APP_VERSION = "v1.7.0-Simplified-Pluriennale";
     const MASTER_USERS = ["g.angelici@partesa.it"];
 
     let fullDatabase = [];      
@@ -179,7 +209,6 @@
     let budgetDb = [];
     let selectedCustomer = null; 
     let highlightedIndex = -1;
-    let calcoloPluriennaleOutput = ""; 
 
     function log(msg) {
       const el = document.getElementById("log");
@@ -301,6 +330,19 @@
         });
       }
 
+      function rinfrescaObbligatorietaNote() {
+        const tipoValidita = document.getElementById("selectValidita").value;
+        const tImporto = document.getElementById("tipoImporto").value;
+        const reqNote = document.getElementById("reqNote");
+
+        // Note obbligatorie se Pluriennale OPPURE se Importo è Variabile
+        if (tipoValidita === "pluriennale" || tImporto === "Variabile") {
+          reqNote.style.display = "inline";
+        } else {
+          reqNote.style.display = "none";
+        }
+      }
+
       function setupGestioneValidita() {
         const selectValidita = document.getElementById("selectValidita");
         const sezioni = {
@@ -312,14 +354,14 @@
         const annoAnnuale = document.getElementById("annoAnnuale");
         const dataInizioAnnuale = document.getElementById("dataInizioAnnuale");
         const dataFineAnnuale = document.getElementById("dataFineAnnuale");
-        const dataInizioPluri = document.getElementById("dataInizioPluri");
-        const dataFinePluri = document.getElementById("dataFinePluri");
+        const meseInizioPluri = document.getElementById("meseInizioPluri");
+        const annoFinePluri = document.getElementById("annoFinePluri");
         const meseSpot = document.getElementById("meseSpot");
 
         selectValidita.addEventListener("change", () => {
           Object.values(sezioni).forEach(s => s.style.display = "none");
           dataInizioAnnuale.required = false; dataFineAnnuale.required = false;
-          dataInizioPluri.required = false; dataFinePluri.required = false;
+          meseInizioPluri.required = false; annoFinePluri.required = false;
           meseSpot.required = false;
 
           const v = selectValidita.value;
@@ -329,12 +371,12 @@
               dataInizioAnnuale.required = true; dataFineAnnuale.required = true;
               allineaVincoliAnnoAnnuale();
             } else if (v === "pluriennale") {
-              dataInizioPluri.required = true; dataFinePluri.required = true;
-              eseguiCalcoloPluriennale();
+              meseInizioPluri.required = true; annoFinePluri.required = true;
             } else if (v === "spot") {
               meseSpot.required = true;
             }
           }
+          rinfrescaObbligatorietaNote();
         });
 
         function allineaVincoliAnnoAnnuale() {
@@ -342,76 +384,19 @@
           dataInizioAnnuale.min = `${anno}-01-01`; dataInizioAnnuale.max = `${anno}-12-31`;
           dataFineAnnuale.min = `${anno}-01-01`; dataFineAnnuale.max = `${anno}-12-31`;
           if (dataInizioAnnuale.value && !dataInizioAnnuale.value.startsWith(anno)) dataInizioAnnuale.value = "";
-          if (dataFineAnnuale.value && !dataFineAnnuale.value.startsWith(anno)) dataFineFineAnnuale.value = "";
+          if (dataFineAnnuale.value && !dataFineAnnuale.value.startsWith(anno)) dataFineAnnuale.value = "";
         }
         annoAnnuale.addEventListener("change", allineaVincoliAnnoAnnuale);
-
-        function eseguiCalcoloPluriennale() {
-          const divOutput = document.getElementById("ripartizioneAutomaticaAnni");
-          calcoloPluriennaleOutput = "";
-
-          if (!dataInizioPluri.value || !dataFinePluri.value) {
-            divOutput.innerHTML = "Inserisci entrambe le date per calcolare la quota pro-rata.";
-            return;
-          }
-
-          const inizio = new Date(dataInizioPluri.value);
-          const fine = new Date(dataFinePluri.value);
-
-          if (inizio > fine) {
-            divOutput.innerHTML = "<span style='color:red;'>Errore: La data inizio è successiva alla data fine.</span>";
-            return;
-          }
-
-          const millisecondiInGiorno = 24 * 60 * 60 * 1000;
-          const totaleGiorni = Math.round((fine - inizio) / millisecondiInGiorno) + 1;
-          const annoInizio = inizio.getFullYear();
-          const annoFine = fine.getFullYear();
-          let ripartizione = {};
-
-          for (let anno = annoInizio; anno <= annoFine; anno++) {
-            const dataInizioAnno = new Date(anno, 0, 1);
-            const dataFineAnno = new Date(anno, 11, 31);
-            const dataInizioEffettiva = inizio > dataInizioAnno ? inizio : dataInizioAnno;
-            const dataFineEffettiva = fine < dataFineAnno ? fine : dataFineAnno;
-
-            const giorniAnno = Math.round((dataFineEffettiva - dataInizioEffettiva) / millisecondiInGiorno) + 1;
-            ripartizione[anno] = giorniAnno;
-          }
-
-          let htmlTable = `<table style='width:100%; border-collapse:collapse; font-size:11px;'>
-            <tr style='background:#eee;'><th>Anno</th><th>Giorni</th><th>Quota %</th></tr>`;
-          let logTesto = [];
-
-          Object.keys(ripartizione).forEach(anno => {
-            const gg = ripartizione[anno];
-            const pct = ((gg / totaleGiorni) * 100).toFixed(1);
-            htmlTable += `<tr><td>${anno}</td><td>${gg} gg</td><td><b>${pct}%</b></td></tr>`;
-            logTesto.push(`${anno}: ${gg}gg (${pct}%)`);
-          });
-
-          htmlTable += `</table><div style='margin-top:4px; font-weight:bold;'>Totale: ${totaleGiorni} gg</div>`;
-          divOutput.innerHTML = htmlTable;
-          calcoloPluriennaleOutput = logTesto.join(" | ");
-        }
-
-        dataInizioPluri.addEventListener("change", eseguiCalcoloPluriennale);
-        dataFinePluri.addEventListener("change", eseguiCalcoloPluriennale);
       }
 
       function setupLogicaEconomica() {
         const tipoImporto = document.getElementById("tipoImporto");
-        const reqNote = document.getElementById("reqNote");
         const impReintegrato = document.getElementById("importoReintegrato");
         const impLiquidare = document.getElementById("importoLiquidare");
         const impExtra = document.getElementById("importoExtra");
 
         tipoImporto.addEventListener("change", () => {
-          if (tipoImporto.value === "Variabile") {
-            reqNote.style.display = "inline";
-          } else {
-            reqNote.style.display = "none";
-          }
+          rinfrescaObbligatorietaNote();
         });
 
         function rinfrescaCalcoloExtra() {
@@ -530,7 +515,6 @@
         selectedCustomer = customer; 
         searchInput.value = customer.searchKey || customer.SearchKey || "";
         
-        // Sblocco dei controlli successivi e della sezione economica
         document.getElementById("selectBudget").disabled = false;
         document.getElementById("selectValidita").disabled = false;
         selectFornitore.disabled = false;
@@ -543,8 +527,7 @@
         document.getElementById("noteIntervento").disabled = false;
         
         submitBtn.disabled = false;
-
-        log("Cliente " + (customer.codPdV || customer.CodPdV) + " agganciato in memoria. Sezione economica attiva.");
+        log("Cliente " + (customer.codPdV || customer.CodPdV) + " agganciato.");
       }
 
       // SUBMIT E GENERAZIONE EMAIL
@@ -578,10 +561,10 @@
           stringaDettaglioValidita = `Annuale (Anno ref: ${document.getElementById("annoAnnuale").value}) - Dal ${dIn} al ${dFi}`;
         } 
         else if (tipoValidita === "pluriennale") {
-          const dIn = document.getElementById("dataInizioPluri").value;
-          const dFi = document.getElementById("dataFinePluri").value;
-          if (!dIn || !dFi) { alert("Errore: Inserire le date per la ripartizione pluriennale."); return; }
-          stringaDettaglioValidita = `Pluriennale - Dal ${dIn} al ${dFi} [Ripartizione: ${calcoloPluriennaleOutput}]`;
+          const mIn = document.getElementById("meseInizioPluri").value;
+          const aFi = document.getElementById("annoFinePluri").value;
+          if (!mIn || !aFi) { alert("Errore: Selezionare Mese Partenza e Anno Scadenza per il Pluriennale."); return; }
+          stringaDettaglioValidita = `Pluriennale - Partenza: ${mIn} 2026 -> Scadenza Anno: ${aFi}`;
         } 
         else if (tipoValidita === "spot") {
           const mScelto = document.getElementById("meseSpot").value;
@@ -589,7 +572,7 @@
           stringaDettaglioValidita = `Una tantum / Spot - Mese liquidazione: ${mScelto} 2026`;
         }
 
-        // VERIFICHE E VALIDAZIONI ECONOMICHE
+        // VERIFICHE ECONOMICHE E NOTE
         const tImporto = document.getElementById("tipoImporto").value;
         const valReintegrato = parseFloat(document.getElementById("importoReintegrato").value);
         const valLiquidare = parseFloat(document.getElementById("importoLiquidare").value);
@@ -605,18 +588,21 @@
           return;
         }
 
+        // Controllo coerenza note obbligatorie
+        if (tipoValidita === "pluriennale" && txtNote === "") {
+          alert("Errore: Per i contratti Pluriennali è obbligatorio specificare la ripartizione economica per anno nel campo Note.");
+          return;
+        }
         if (tImporto === "Variabile" && txtNote === "") {
           alert("Errore: Il campo Note è obbligatorio quando il tipo di importo è Variabile.");
           return;
         }
 
-        // Calcolo extra per il corpo email
         let txtExtra = "Nessuno";
         if (valLiquidare > valReintegrato) {
           txtExtra = (valLiquidare - valReintegrato).toFixed(2) + " €";
         }
 
-        // Recupero i dati dal record nascosto in memoria
         const cPdv = selectedCustomer.codPdV || selectedCustomer.CodPdV || "";
         const cRag = selectedCustomer.ragioneSociale || selectedCustomer.RagioneSociale || "";
         const cBu = selectedCustomer.codBU || selectedCustomer.CodBU || "";
@@ -652,7 +638,7 @@
                 <tr><td>Importo Reintegrato</td><td>${valReintegrato.toFixed(2)} €</td></tr>
                 <tr><td>Importo da Liquidare</td><td>${valLiquidare.toFixed(2)} €</td></tr>
                 <tr><td>Importo Extra Non Coperto</td><td><span style="color:#d83b01; font-weight:bold;">${txtExtra}</span></td></tr>
-                <tr><td>Note / Giustificativo</td><td>${txtNote ? txtNote : "Nessuna nota inserita"}</td></tr>
+                <tr><td>Note / Giustificativo Ripartizione</td><td>${txtNote ? txtNote : "Nessuna nota inserita"}</td></tr>
                 <tr style="background-color: #f9f9f9;"><td colspan="2"></td></tr>
                 <tr><td>Venditore</td><td>${cVen}</td></tr>
               </table>
