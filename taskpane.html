@@ -1,8 +1,15 @@
+<!-- 
+  ADD-IN RICHIESTE RV - TASKPANE COMPONENT
+  Version: 1.1.0-UI-Light
+  Date: 2026-07-13
+  Changes: Rimossi campi UI ridondanti (Venditore, RV, RSM). Dati mantenuti in memoria.
+  Next Step: Implementazione cascading dropdowns.
+-->
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8" />
-<title>Test Add-in RV</title>
+<title>Richiesta RV - Data Entry</title>
 <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
 <style>
   body { font-family: 'Segoe UI', sans-serif; padding: 16px; font-size: 13px; color: #333; }
@@ -29,7 +36,7 @@
 </style>
 </head>
 <body>
-  <h2>Prototipo Data Entry RV</h2>
+  <h2>Inserimento Richiesta RV</h2>
   <div id="modeLabel">Modalità: caricamento...</div>
   <div id="userLabel">Utente: verifica in corso...</div>
 
@@ -40,7 +47,7 @@
     <ul id="suggestions" class="suggestions-list"></ul>
   </div>
 
-  <!-- CAMPI ANAGRAFICA (READ-ONLY) -->
+  <!-- CAMPI ANAGRAFICA ESSENZIALI (READ-ONLY) -->
   <label for="codPdV">Cod PdV</label>
   <input type="text" id="codPdV" readonly>
 
@@ -50,36 +57,23 @@
   <label for="codBU">Cod BU</label>
   <input type="text" id="codBU" readonly>
 
-  <label for="venditore">Venditore</label>
-  <input type="text" id="venditore" readonly>
-
-  <label for="respVendite">Responsabile Vendite (RV)</label>
-  <input type="text" id="respVendite" readonly>
-
-  <label for="respCommerciale">Responsabile Commerciale (RSM)</label>
-  <input type="text" id="respCommerciale" readonly>
-
   <label for="emailRSM">Email RSM (Destinatario CC)</label>
   <input type="text" id="emailRSM" readonly>
 
-  <!-- CAMPO INTERATTIVO DA COMPILARE -->
+  <!-- SPAZIO FUTURO PER CASCADING DROPDOWNS -->
   <label for="gruppoCliente">Gruppo?</label>
   <select id="gruppoCliente" disabled>
     <option value="No">No</option>
     <option value="Sì">Sì</option>
   </select>
 
-  <button id="attachBtn" style="display:none;" disabled>Allega e Invia Richiesta RV</button>
+  <button id="submitBtn" disabled>Genera Richiesta RV</button>
 
   <div id="log">Log eventi...</div>
 
   <script>
-    // ----------------------------------------------------------------
-    // HARD-CODING UTENTI MASTER PER I TEST (RLS)
-    // ----------------------------------------------------------------
-    const MASTER_USERS = [
-      "g.angelici@partesa.it"
-    ];
+    // Configurazione Utenti Master (RLS)
+    const MASTER_USERS = ["g.angelici@partesa.it"];
 
     let fullDatabase = [];      
     let filteredDatabase = [];  
@@ -94,11 +88,16 @@
     Office.onReady(async (info) => {
       const params = new URLSearchParams(window.location.search);
       const mode = params.get("mode") || "general";
-      document.getElementById("modeLabel").textContent = "Modalità: " + mode + " | Host: " + info.host;
-
+      
+      // Personalizzazione testo del bottone principale in base al contesto
+      const submitBtn = document.getElementById("submitBtn");
       if (mode === "attach") {
-        document.getElementById("attachBtn").style.display = "block";
+        submitBtn.textContent = "Allega e Invia Richiesta RV";
+      } else {
+        submitBtn.textContent = "Apri e Invia Richiesta RV";
       }
+      
+      document.getElementById("modeLabel").textContent = "Modalità: " + mode + " | Host: " + info.host;
 
       // 1. IDENTIFICAZIONE UTENTE
       let userEmail = "";
@@ -166,7 +165,7 @@
         }
       }
 
-      // 4. AUTOCOMPLETE TOLERANT (CASE-INSENSITIVE SULLE CHIAVI)
+      // 4. AUTOCOMPLETE
       const searchInput = document.getElementById("searchCliente");
       const suggestionsList = document.getElementById("suggestions");
 
@@ -197,7 +196,7 @@
         if (e.target !== searchInput) suggestionsList.style.display = "none";
       });
 
-      // 5. SELEZIONE CLIENTE (TOLERANT SUL CASE DEI CAMPI JSON)
+      // 5. SELEZIONE CLIENTE (I dati nascosti rimangono in memoria nell'oggetto customer)
       function selectCustomer(customer) {
         selectedCustomer = customer;
         searchInput.value = customer.searchKey || customer.SearchKey || "";
@@ -207,9 +206,6 @@
         document.getElementById("codPdV").value = customer.codPdV || customer.CodPdV || "";
         document.getElementById("ragioneSociale").value = customer.ragioneSociale || customer.RagioneSociale || "";
         document.getElementById("codBU").value = customer.codBU || customer.CodBU || "";
-        document.getElementById("venditore").value = customer.venditore || customer.Venditore || "";
-        document.getElementById("respVendite").value = customer.responsabileVendite || customer.ResponsabileVendite || "";
-        document.getElementById("respCommerciale").value = customer.responsabileCommerciale || customer.ResponsabileCommerciale || "";
         document.getElementById("emailRSM").value = customer.emailResponsabileCommerciale || customer.EmailResponsabileCommerciale || "";
 
         document.getElementById("gruppoCliente").disabled = false;
@@ -218,21 +214,20 @@
         const checkRV = customer.CheckRV || "Mancante";
         log("Selezionato PdV: " + (customer.codPdV || customer.CodPdV) + " | Validità - RSM: " + checkRSM + ", RV: " + checkRV);
 
-        document.getElementById("attachBtn").disabled = false;
+        submitBtn.disabled = false;
       }
 
-      // 6. GENERAZIONE EMAIL CON CAMPO GRUPPO
-      document.getElementById("attachBtn").addEventListener("click", () => {
-        const item = Office.context.mailbox.item;
-        if (!item || !item.itemId || !selectedCustomer) return;
+      // 6. GENERAZIONE EMAIL CON RECUPERO IN MEMORIA DEL VENDITORE
+      submitBtn.addEventListener("click", () => {
+        if (!selectedCustomer) return;
 
         const gruppoScelto = document.getElementById("gruppoCliente").value;
         const cPdv = selectedCustomer.codPdV || selectedCustomer.CodPdV || "";
         const cRag = selectedCustomer.ragioneSociale || selectedCustomer.RagioneSociale || "";
         const cBu = selectedCustomer.codBU || selectedCustomer.CodBU || "";
-        const cVen = selectedCustomer.venditore || selectedCustomer.Venditore || "";
-        const cRv = selectedCustomer.responsabileVendite || selectedCustomer.ResponsabileVendite || "";
-        const cRsm = selectedCustomer.responsabileCommerciale || selectedCustomer.ResponsabileCommerciale || "";
+        
+        // Estrazione in background dei dati non visibili a terminale
+        const cVen = selectedCustomer.venditore || selectedCustomer.Venditore || "N/D";
         const cEmailRsm = selectedCustomer.emailResponsabileCommerciale || selectedCustomer.EmailResponsabileCommerciale || "";
         const checkRSM = selectedCustomer.CheckRSM || "N/A";
         const checkRV = selectedCustomer.CheckRV || "N/A";
@@ -248,25 +243,28 @@
                 <tr><td>Business Unit</td><td>${cBu}</td></tr>
                 <tr><td>Gruppo</td><td><b>${gruppoScelto}</b></td></tr>
                 <tr><td>Venditore</td><td>${cVen}</td></tr>
-                <tr><td>Responsabile Vendites (RV)</td><td>${cRv}</td></tr>
-                <tr><td>Responsabile Commerciale (RSM)</td><td>${cRsm}</td></tr>
               </table>
-              <p>Stato controlli interni al caricamento: CheckRV=${checkRV} | CheckRSM=${checkRSM}</p>
+              <p style="font-size: 11px; color: #666;">Stato controlli interni al caricamento: CheckRV=${checkRV} | CheckRSM=${checkRSM}</p>
             </body>
           </html>
         `;
 
-        Office.context.mailbox.displayNewMessageForm({
+        const messageFormOptions = {
           subject: "Richiesta RV - " + cPdv + " - " + cRag,
           htmlBody: htmlBody,
-          cc: [cEmailRsm],
-          attachments: [{
+          cc: [cEmailRsm]
+        };
+
+        // Gestione condizionale dell'allegato se siamo in modalità "attach"
+        if (mode === "attach" && Office.context.mailbox.item && Office.context.mailbox.item.itemId) {
+          messageFormOptions.attachments = [{
             type: "item",
-            itemId: item.itemId,
+            itemId: Office.context.mailbox.item.itemId,
             name: "Messaggio originario RV - " + cPdv + ".eml"
-          }]
-        });
-        
+          }];
+        }
+
+        Office.context.mailbox.displayNewMessageForm(messageFormOptions);
         log("Finestra email creata con successo.");
       });
     });
