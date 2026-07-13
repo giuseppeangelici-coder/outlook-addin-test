@@ -390,6 +390,8 @@ document.addEventListener("click", (e) => {
 
       // 7. SELEZIONE CLIENTE -> SBLOCCO COMPLETO DEI CAMPI
       function selectCustomer(customer) {
+        suggestionsList.style.display = "none";
+highlightedIndex = -1;
         selectedCustomer = customer;
         searchInput.value = customer.searchKey || customer.SearchKey || "";
         suggestionsList.innerHTML = "";
