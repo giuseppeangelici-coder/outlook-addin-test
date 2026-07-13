@@ -2,9 +2,8 @@
   ADD-IN RICHIESTE RV - TASKPANE COMPONENT
   Version: 1.3.0-Conditional-Fields
   Date: 2026-07-13
-  Changes: Risolto bug di sintassi (doppio blocco catch isolato nel caricamento fetch).
-           Integrata la gestione dinamica del Budget e i campi condizionali di stima.
-           Inclusi i nuovi campi all'interno del layout dell'email HTML.
+  Changes: Corretto l'argomento mancante nel fetch(urlClienti).
+           Sistemata la chiusura del blocco try/catch all'interno di Office.onReady.
   Next Step: Sviluppi successivi sul form.
 -->
 <!DOCTYPE html>
@@ -174,7 +173,15 @@
           log("Chiavi rilevate in FornitoriTipologie.json: " + Object.keys(fornitoreTipologiaDb[0]).join(", "));
         }
 
+        applyRowLevelSecurity(userEmail);
+        popolaFornitoriUnivoci();
+        popolaBudget();
 
+        log("Fornitori caricati nella select: " + document.getElementById("selectFornitore").options.length);
+
+      } catch (err) {
+        log("ERRORE CARICAMENTO: " + err.message);
+      }
 
       // 3. ROW-LEVEL SECURITY (RLS)
       function applyRowLevelSecurity(email) {
