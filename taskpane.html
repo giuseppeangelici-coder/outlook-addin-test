@@ -147,6 +147,10 @@
         
         applyRowLevelSecurity(userEmail);
         popolaFornitoriUnivoci();
+        log(
+  "Fornitori caricati nella select: " +
+  document.getElementById("selectFornitore").options.length
+);
 
       } catch (err) {
         log("ERRORE CARICAMENTO: " + err.message);
@@ -182,8 +186,8 @@
         const fornitoriVisti = new Set();
 
         fornitoreTipologiaDb.forEach(item => {
-          const cod = item.CodFornitore;
-          const ragSoc = item.RagioneSocialeFornitore;
+       const cod = String(item.CodFornitore).trim();
+       const ragSoc = String(item.RagioneSocialeFornitore).trim();
           if (cod && !fornitoriVisti.has(cod)) {
             fornitoriVisti.add(cod);
             const opt = document.createElement("option");
@@ -207,26 +211,42 @@
       });
 
       // Verso B: L'utente scrive o seleziona una tipologia -> Allinea il fornitore
-      inputTipologia.addEventListener("input", () => {
-        const valoreDigitato = inputTipologia.value.trim().toLowerCase();
-        
-        // Cerca una corrispondenza esatta (case-insensitive) nel database delle tipologie
-        const match = fornitoreTipologiaDb.find(item => 
-          (item.TipologiaIntervento || "").trim().toLowerCase() === valoreDigitato
-        );
-        
-        if (match) {
-          // FIX: CodFornitore (non CodiceFornitore) - normalizzato per il confronto
-          const targetCodice = String(match.CodFornitore).trim();
-          
-          // Forza la selezione del fornitore corrispondente nella select
-          selectFornitore.value = targetCodice;
-          
-          // Rigenera la lista filtrata per quel fornitore senza svuotare il testo appena inserito
-          aggiornaDatalistTipologie(targetCodice);
-          log("Fornitore allineato automaticamente a: " + match.RagioneSocialeFornitore);
-        }
-      });
+inputTipologia.addEventListener("change", () => {
+
+  const valoreScelto = inputTipologia.value.trim();
+
+  const match = fornitoreTipologiaDb.find(item =>
+    String(item.TipologiaIntervento).trim() === valoreScelto
+  );
+
+  if (!match) {
+    log("Nessuna corrispondenza trovata per: " + valoreScelto);
+    return;
+  }
+
+  const targetCodice = String(match.CodFornitore).trim();
+
+  const optionEsistente = [...selectFornitore.options]
+    .find(o => String(o.value).trim() === targetCodice);
+
+  if (optionEsistente) {
+    selectFornitore.value = optionEsistente.value;
+
+    log(
+      "Fornitore allineato: " +
+      match.RagioneSocialeFornitore +
+      " (" + targetCodice + ")"
+    );
+  } else {
+    log(
+      "ERRORE: Fornitore " +
+      targetCodice +
+      " non trovato nella select"
+    );
+  }
+
+  aggiornaDatalistTipologie(targetCodice);
+});
 
       function aggiornaDatalistTipologie(codFornitore = "") {
         listaTipologie.innerHTML = "";
