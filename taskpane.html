@@ -24,6 +24,10 @@
   input[readonly] { background-color: #f3f3f3; color: #666; cursor: not-allowed; }
   button { margin-top: 20px; background: #0078d4; color: white; border: none; cursor: pointer; padding: 8px; font-weight: bold; }
   button:disabled { background: #ccc; cursor: not-allowed; }
+  .suggestions-list li.highlight {
+  background-color: #0078d4;
+  color: white;
+}
   
   .search-container { position: relative; }
   .suggestions-list { 
@@ -95,6 +99,7 @@
     let filteredDatabase = [];  
     let fornitoreTipologiaDb = [];
     let selectedCustomer = null;
+    let highlightedIndex = -1;
 
     function log(msg) {
       const el = document.getElementById("log");
@@ -266,35 +271,122 @@ inputTipologia.addEventListener("change", () => {
       // Al caricamento iniziale prepariamo la lista completa di tutte le tipologie
       aggiornaDatalistTipologie();
 
-      // 6. AUTOCOMPLETE CLIENTE (Invariato)
-      const searchInput = document.getElementById("searchCliente");
-      const suggestionsList = document.getElementById("suggestions");
+      // 6. AUTOCOMPLETE CLIENTE CON NAVIGAZIONE TASTIERA
 
-      searchInput.addEventListener("input", (e) => {
-        const query = e.target.value.toLowerCase().trim();
-        suggestionsList.innerHTML = "";
-        suggestionsList.style.display = "none";
-        if (query.length < 2) return;
+const searchInput = document.getElementById("searchCliente");
+const suggestionsList = document.getElementById("suggestions");
 
-        const filtered = filteredDatabase.filter(c => {
-          const chiave = c.searchKey || c.SearchKey || "";
-          return chiave.toLowerCase().includes(query);
-        }).slice(0, 10);
+searchInput.addEventListener("input", (e) => {
 
-        if (filtered.length > 0) {
-          suggestionsList.style.display = "block";
-          filtered.forEach(c => {
-            const li = document.createElement("li");
-            li.textContent = c.searchKey || c.SearchKey || "";
-            li.addEventListener("click", () => selectCustomer(c));
-            suggestionsList.appendChild(li);
-          });
-        }
+  highlightedIndex = -1;
+
+  const query = e.target.value.toLowerCase().trim();
+
+  suggestionsList.innerHTML = "";
+  suggestionsList.style.display = "none";
+
+  if (query.length < 2) return;
+
+  const filtered = filteredDatabase.filter(c => {
+    const chiave = c.searchKey || c.SearchKey || "";
+    return chiave.toLowerCase().includes(query);
+  }).slice(0, 10);
+
+  if (filtered.length > 0) {
+
+    suggestionsList.style.display = "block";
+
+    filtered.forEach(c => {
+
+      const li = document.createElement("li");
+
+      li.textContent = c.searchKey || c.SearchKey || "";
+
+      // memorizza il record completo
+      li.customerData = c;
+
+      li.addEventListener("click", () => {
+        selectCustomer(c);
       });
 
-      document.addEventListener("click", (e) => {
-        if (e.target !== searchInput) suggestionsList.style.display = "none";
-      });
+      suggestionsList.appendChild(li);
+    });
+  }
+});
+
+searchInput.addEventListener("keydown", (e) => {
+
+  const items = suggestionsList.querySelectorAll("li");
+
+  if (items.length === 0) return;
+
+  if (e.key === "ArrowDown") {
+
+    e.preventDefault();
+
+    highlightedIndex =
+      highlightedIndex < items.length - 1
+        ? highlightedIndex + 1
+        : 0;
+
+    updateHighlight(items);
+  }
+
+  else if (e.key === "ArrowUp") {
+
+    e.preventDefault();
+
+    highlightedIndex =
+      highlightedIndex > 0
+        ? highlightedIndex - 1
+        : items.length - 1;
+
+    updateHighlight(items);
+  }
+
+  else if (e.key === "Enter") {
+
+    if (highlightedIndex >= 0) {
+
+      e.preventDefault();
+
+      const customer =
+        items[highlightedIndex].customerData;
+
+      selectCustomer(customer);
+    }
+  }
+
+  else if (e.key === "Escape") {
+
+    suggestionsList.style.display = "none";
+    highlightedIndex = -1;
+  }
+});
+
+function updateHighlight(items) {
+
+  items.forEach(item =>
+    item.classList.remove("highlight")
+  );
+
+  if (highlightedIndex >= 0) {
+
+    items[highlightedIndex].classList.add("highlight");
+
+    items[highlightedIndex].scrollIntoView({
+      block: "nearest"
+    });
+  }
+}
+
+document.addEventListener("click", (e) => {
+
+  if (e.target !== searchInput) {
+    suggestionsList.style.display = "none";
+    highlightedIndex = -1;
+  }
+});
 
       // 7. SELEZIONE CLIENTE -> SBLOCCO COMPLETO DEI CAMPI
       function selectCustomer(customer) {
