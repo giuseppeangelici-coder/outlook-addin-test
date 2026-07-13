@@ -1,0 +1,26 @@
+[
+  {
+    "Budget": "Da BUDGET assegnato dal \nLOCAL PORTFOLIO MANAGER",
+    "ObbligoStima": "Vero"
+  },
+  {
+    "Budget": "Da BUDGET RSM assegnato da sede",
+    "ObbligoStima": "Falso"
+  },
+  {
+    "Budget": "ON TOP in cifra fissa",
+    "ObbligoStima": "Falso"
+  },
+  {
+    "Budget": "ON TOP in cifra variabile \n(€ - pezzo -HL - collo )",
+    "ObbligoStima": "Falso"
+  },
+  {
+    "Budget": "VARIE",
+    "ObbligoStima": "Falso"
+  },
+  {
+    "Budget": "TRIANGOLATO",
+    "ObbligoStima": "Falso"
+  }
+]
