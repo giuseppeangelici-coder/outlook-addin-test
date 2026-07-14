@@ -1,6 +1,6 @@
 <!-- 
   ADD-IN RICHIESTE RV - TASKPANE COMPONENT
-  Version: 1.7.1-Simplified-FlowDataProvider
+  Version: 1.7.3-Merce-Omaggio
   Date: 2026-07-13
   Changes: Semplificata la gestione Pluriennale secondo feedback:
            - Inizio: Mese dell'anno corrente (2026).
@@ -21,7 +21,7 @@
   #modeLabel, #userLabel { color: #666; margin-bottom: 8px; font-size: 11px; }
   #userLabel { font-weight: bold; color: #107c41; margin-bottom: 16px; }
   label { display: block; margin-top: 12px; font-weight: 600; }
-  input, select, button, textarea { width: 100%; padding: 6px; margin-top: 4px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 2px; font-family: inherit; }
+  input, select, button, textarea { width: 100%; padding: 6px; margin-top: 4px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 2px; font-family: inherit; font-size: 12px; }
   textarea { resize: vertical; min-height: 50px; }
   button { margin-top: 20px; background: #0078d4; color: white; border: none; cursor: pointer; padding: 8px; font-weight: bold; }
   button:disabled { background: #ccc; cursor: not-allowed; }
@@ -34,7 +34,7 @@
     max-height: 200px; overflow-y: auto; z-index: 1000; display: none; 
     margin: 0; padding: 0; list-style: none;
   }
-  .suggestions-list li { padding: 8px; cursor: pointer; border-bottom: 1px solid #eee; }
+  .suggestions-list li { padding: 8px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 12px; }
   .suggestions-list li:hover { background: #f3f3f3; }
   
   #log { margin-top: 16px; padding: 8px; background: #f3f3f3; font-size: 11px; white-space: pre-wrap; min-height: 60px; border: 1px dashed #ccc; }
@@ -174,6 +174,44 @@
     </select>
   </div>
 
+  <!-- SEZIONE CONDIZIONALE: ARTICOLI MERCE OMAGGIO -->
+  <div id="sezioneMerceOmaggio" style="display: none; margin-top: 12px; padding: 10px; background: #f9f9f9; border-left: 3px solid #107c41;">
+    <h3 style="margin: 0 0 10px 0; font-size: 13px; color: #107c41;">Dettaglio Merce Omaggio</h3>
+
+    <div style="display: grid; grid-template-columns: 1fr 90px; gap: 8px; align-items: end;">
+      <div>
+        <label for="codArticolo1" style="margin-top: 0;">Cod. Articolo #1 <span style="color: red;">*</span></label>
+        <input type="text" id="codArticolo1" placeholder="Codice articolo obbligatorio">
+      </div>
+      <div>
+        <label for="qtaArticolo1" style="margin-top: 0;">Q.tà <span style="color: red;">*</span></label>
+        <input type="number" id="qtaArticolo1" step="1" min="1" placeholder="Q.tà">
+      </div>
+
+      <div>
+        <label for="codArticolo2">Cod. Articolo #2</label>
+        <input type="text" id="codArticolo2" placeholder="Codice articolo facoltativo">
+      </div>
+      <div>
+        <label for="qtaArticolo2">Q.tà</label>
+        <input type="number" id="qtaArticolo2" step="1" min="1" placeholder="Q.tà">
+      </div>
+
+      <div>
+        <label for="codArticolo3">Cod. Articolo #3</label>
+        <input type="text" id="codArticolo3" placeholder="Codice articolo facoltativo">
+      </div>
+      <div>
+        <label for="qtaArticolo3">Q.tà</label>
+        <input type="number" id="qtaArticolo3" step="1" min="1" placeholder="Q.tà">
+      </div>
+    </div>
+
+    <div class="box-avviso" style="margin-top: 10px;">
+      Per il budget <strong>MERCE OMAGGIO</strong> è obbligatorio compilare almeno Cod. Articolo #1 e la relativa quantità.
+    </div>
+  </div>
+
   <!-- SEZIONE DATI ECONOMICI & NOTE -->
   <div id="sezioneEconomica" class="sez-economica" style="border-left: 3px solid #8660a9;">
     <h3 style="margin: 0 0 10px 0; font-size: 13px; color: #8660a9;">Dati Economici & Note</h3>
@@ -188,7 +226,7 @@
     <input type="number" id="importoReintegrato" step="0.01" min="0.01" placeholder="Valore maggiore di 0..." disabled>
 
     <label for="importoLiquidare">Importo da Liquidare (€)</label>
-    <input type="number" id="importoLiquidare" step="0.01" min="0.01" placeholder="Valore maggiore di 0..." disabled>
+    <input type="number" id="importoLiquidare" step="0.01" min="0" placeholder="Inserire 0 oppure un valore maggiore di 0..." disabled>
 
     <label for="importoExtra">Importo Extra Non Coperto (€)</label>
     <input type="text" id="importoExtra" placeholder="Calcolato automaticamente..." readonly style="background: #f3f3f3; font-weight: bold; color: #d83b01;">
@@ -202,7 +240,7 @@
   <div id="log">Log eventi...</div>
 
   <script>
-    const APP_VERSION = "v1.7.1-FlowDataProvider";
+    const APP_VERSION = "v1.7.3-Merce-Omaggio";
     const POWER_AUTOMATE_URL = "https://default66e853deece344dd9d66ee6bdf4159.d4.environment.api.powerplatform.com/powerautomate/automations/direct/workflows/465577c70a414425a1f278e3c3f2bb43/triggers/manual/paths/invoke?api-version=1";
     const MASTER_USERS = [
   "g.angelici@partesa.it",
@@ -224,6 +262,46 @@
       const el = document.getElementById("log");
       el.textContent += "\n" + msg;
       el.scrollTop = el.scrollHeight;
+    }
+
+    function normalizzaTesto(valore) {
+      return String(valore || "").trim().toUpperCase();
+    }
+
+    function aggiungiDestinatariCondizionali(ccRecipients, region, budgetScelto, importoDaLiquidare) {
+      const codiceRegion = String(region || "").trim();
+
+      const destinatariRegion = {
+        "6734": ["g.paruzzolo@partesa.it", "p.lorussi@partesa.it"],
+        "6724": ["g.paruzzolo@partesa.it", "p.lorussi@partesa.it"],
+        "6772": ["g.paruzzolo@partesa.it", "p.lorussi@partesa.it"],
+        "6716": ["g.angelici@partesa.it", "f.corinti@partesa.it"],
+        "6771": ["g.angelici@partesa.it", "f.corinti@partesa.it"],
+        "6765": ["f.difloriano@partesa.it", "p.gualtieri@partesa.it"],
+        "6770": ["f.difloriano@partesa.it", "p.gualtieri@partesa.it"],
+        "6760": ["f.difloriano@partesa.it", "p.gualtieri@partesa.it"]
+      };
+
+      (destinatariRegion[codiceRegion] || []).forEach(email => ccRecipients.add(email));
+
+      if (normalizzaTesto(budgetScelto) === "MERCE OMAGGIO") {
+        const destinatariMerceOmaggio = {
+          "6734": "service.adriatico@partesa.it",
+          "6716": "clienti.centro@partesa.it",
+          "6771": "clienti.centro@partesa.it",
+          "6724": "clienti.nordest@partesa.it",
+          "6772": "clienti.nordest@partesa.it",
+          "6765": "clienti.lombardia@partesa.it",
+          "6770": "clienti.lombardia@partesa.it",
+          "6760": "clienti.nordovest@partesa.it"
+        };
+        const emailService = destinatariMerceOmaggio[codiceRegion];
+        if (emailService) ccRecipients.add(emailService);
+      }
+
+      if (Number(importoDaLiquidare) > 0) {
+        ccRecipients.add("contratti.clienti@partesa.it");
+      }
     }
 
     Office.onReady(async (info) => {
@@ -323,6 +401,9 @@
           const sezioneStima = document.getElementById("sezioneStima");
           const quantitaStima = document.getElementById("quantitaStima");
           const unitaMisura = document.getElementById("unitaMisura");
+          const sezioneMerceOmaggio = document.getElementById("sezioneMerceOmaggio");
+          const codArticolo1 = document.getElementById("codArticolo1");
+          const qtaArticolo1 = document.getElementById("qtaArticolo1");
 
           const obbligoStima = match && (match.ObbligoStima === true || String(match.ObbligoStima).toLowerCase() === "vero" || String(match.ObbligoStima).toLowerCase() === "true");
 
@@ -336,6 +417,18 @@
             unitaMisura.required = false;
             quantitaStima.value = "";
             unitaMisura.value = "";
+          }
+
+          const isMerceOmaggio = normalizzaTesto(budgetSelezionato) === "MERCE OMAGGIO";
+          sezioneMerceOmaggio.style.display = isMerceOmaggio ? "block" : "none";
+          codArticolo1.required = isMerceOmaggio;
+          qtaArticolo1.required = isMerceOmaggio;
+
+          if (!isMerceOmaggio) {
+            for (let i = 1; i <= 3; i++) {
+              document.getElementById(`codArticolo${i}`).value = "";
+              document.getElementById(`qtaArticolo${i}`).value = "";
+            }
           }
         });
       }
@@ -564,15 +657,62 @@ function formatDateIT(dataString) {
         if (quantitaStima.required) {
           const qVal = parseInt(quantitaStima.value, 10);
           if (isNaN(qVal) || qVal <= 0 || !unitaMisura.value) {
-            alert("Errore: Valorizzare Quantità Stima e Unità di Misura.");
+            alert("Errore: compilare Quantità Stima con un numero intero maggiore di 0 e selezionare l’Unità di Misura.");
             return;
           }
+        }
+
+        // Validazione campi a tendina e campi collegati
+        const budgetSelezionato = document.getElementById("selectBudget").value;
+        if (!budgetSelezionato) {
+          alert("Errore: selezionare un Budget dal menu a tendina.");
+          return;
+        }
+
+        // Validazione articoli per MERCE OMAGGIO
+        const isMerceOmaggio = normalizzaTesto(budgetSelezionato) === "MERCE OMAGGIO";
+        const articoliOmaggio = [];
+
+        if (isMerceOmaggio) {
+          for (let i = 1; i <= 3; i++) {
+            const codice = document.getElementById(`codArticolo${i}`).value.trim();
+            const qtaRaw = document.getElementById(`qtaArticolo${i}`).value;
+            const quantita = qtaRaw === "" ? NaN : Number(qtaRaw);
+
+            if (i === 1 && (!codice || !Number.isInteger(quantita) || quantita <= 0)) {
+              alert("Errore: per MERCE OMAGGIO è obbligatorio compilare Cod. Articolo #1 e una Q.tà intera maggiore di 0.");
+              return;
+            }
+
+            if ((codice && (!Number.isInteger(quantita) || quantita <= 0)) || (!codice && qtaRaw !== "")) {
+              alert(`Errore: completare correttamente sia Cod. Articolo #${i} sia la relativa Q.tà.`);
+              return;
+            }
+
+            if (codice) {
+              articoliOmaggio.push({ codice, quantita });
+            }
+          }
+        }
+
+        const tipologiaInserita = inputTipologia.value.trim();
+        const tipologiaValida = fornitoreTipologiaDb.some(item =>
+          String(item.TipologiaIntervento || "").trim() === tipologiaInserita
+        );
+        if (!tipologiaInserita || !tipologiaValida) {
+          alert("Errore: selezionare una Tipologia Intervento valida dall'elenco proposto.");
+          return;
+        }
+
+        if (!selectFornitore.value) {
+          alert("Errore: selezionare un Fornitore valido.");
+          return;
         }
 
         // Validazione periodo validità
         const tipoValidita = document.getElementById("selectValidita").value;
         if (!tipoValidita) {
-          alert("Errore: Selezionare il tipo di Periodo Validità.");
+          alert("Errore: selezionare un Periodo Validità dal menu a tendina.");
           return;
         }
 
@@ -581,18 +721,19 @@ function formatDateIT(dataString) {
         if (tipoValidita === "annuale") {
           const dIn = document.getElementById("dataInizioAnnuale").value;
           const dFi = document.getElementById("dataFineAnnuale").value;
-          if (!dIn || !dFi) { alert("Errore: Inserire le date per il periodo annuale."); return; }
+          if (!dIn || !dFi) { alert("Errore: inserire Data Inizio e Data Fine per il periodo annuale."); return; }
+          if (dIn > dFi) { alert("Errore: la Data Fine non può essere precedente alla Data Inizio."); return; }
           stringaDettaglioValidita = `Annuale (Anno ref: ${document.getElementById("annoAnnuale").value}) - Dal ${formatDateIT(dIn)} al ${formatDateIT(dFi)}`;
         } 
         else if (tipoValidita === "pluriennale") {
           const mIn = document.getElementById("meseInizioPluri").value;
           const aFi = document.getElementById("annoFinePluri").value;
-          if (!mIn || !aFi) { alert("Errore: Selezionare Mese Partenza e Anno Scadenza per il Pluriennale."); return; }
+          if (!mIn || !aFi) { alert("Errore: selezionare il Mese di partenza e l’Anno di scadenza per il periodo pluriennale."); return; }
           stringaDettaglioValidita = `Pluriennale - Partenza: ${mIn} 2026 -> Scadenza Anno: ${aFi}`;
         } 
         else if (tipoValidita === "spot") {
           const mScelto = document.getElementById("meseSpot").value;
-          if (!mScelto) { alert("Errore: Selezionare il mese per l'intervento Spot."); return; }
+          if (!mScelto) { alert("Errore: selezionare il Mese di liquidazione per l’intervento Spot."); return; }
           stringaDettaglioValidita = `Una tantum / Spot - Mese liquidazione: ${mScelto} 2026`;
         }
 
@@ -644,43 +785,17 @@ parseFloat(
         
         const ccRecipients = new Set();
 
-if (cEmailRsm) {
-  ccRecipients.add(cEmailRsm);
-}
+        if (cEmailRsm) {
+          ccRecipients.add(cEmailRsm);
+        }
 
-if (valLiquidare > 0) {
-  ccRecipients.add("contratti.clienti@partesa.it");
-}
+        const budgetScelto = budgetSelezionato;
+        aggiungiDestinatariCondizionali(ccRecipients, cBu, budgetScelto, valLiquidare);
 
-switch(String(cBu).trim()) {
-
-  case "6716":
-  case "6771":
-
-    ccRecipients.add("g.angelici@partesa.it");
-    ccRecipients.add("f.corinti@partesa.it");
-    break;
-
-  case "6734":
-  case "6724":
-  case "6772":
-
-    ccRecipients.add("g.paruzzolo@partesa.it");
-    ccRecipients.add("p.lorussi@partesa.it");
-    break;
-
-  case "6760":
-  case "6765":
-  case "6770":
-
-    ccRecipients.add("f.difloriano@partesa.it");
-    ccRecipients.add("p.gualtieri@partesa.it");
-    break;
-};
         const cVen = selectedCustomer.venditore || selectedCustomer.Venditore || "N/D";
        
         
-        const budgetScelto = document.getElementById("selectBudget").value || "N/D";
+        // budgetScelto già validato sopra
         const qStimaText = quantitaStima.required ? quantitaStima.value : "Non richiesta";
         const udmText = quantitaStima.required ? unitaMisura.value : "Non richiesta";
         const gruppoScelto = document.getElementById("gruppoCliente").value;
@@ -688,11 +803,20 @@ switch(String(cBu).trim()) {
         const fornitoreOpt = selectFornitore.options[selectFornitore.selectedIndex];
         const fornitoreScelto = fornitoreOpt ? fornitoreOpt.textContent : "Non specificato";
 
+        const righeMerceOmaggio = isMerceOmaggio
+          ? `
+                <tr style="background-color: #eaf6ee;"><td colspan="2"><b>DETTAGLIO MERCE OMAGGIO</b></td></tr>
+                ${articoliOmaggio.map((articolo, index) => `
+                <tr><td>Cod. Articolo #${index + 1}</td><td>${articolo.codice}</td></tr>
+                <tr><td>Q.tà Articolo #${index + 1}</td><td>${articolo.quantita}</td></tr>`).join("")}
+            `
+          : "";
+
         const htmlBody = `
           <html>
-            <body>
+            <body style="font-family: Calibri, sans-serif; font-size: 12px;">
               <p>Richiesta di attivazione procedura RV per il seguente punto vendita:</p>
-              <table border="1" cellpadding="6" style="border-collapse: collapse; font-family: Calibri, sans-serif;">
+              <table border="1" cellpadding="6" style="border-collapse: collapse; font-family: Calibri, sans-serif; font-size: 12px;">
                 <tr style="background-color: #f2f2f2;"><td><b>Campo</b></td><td><b>Valore</b></td></tr>
                 <tr><td>Codice PdV</td><td>${cPdv}</td></tr>
                 <tr><td>Ragione Sociale</td><td>${cRag}</td></tr>
@@ -703,6 +827,7 @@ switch(String(cBu).trim()) {
                 <tr><td>Budget</td><td>${budgetScelto}</td></tr>
                 <tr><td>Quantità Stima</td><td>${qStimaText}</td></tr>
                 <tr><td>Unità di Misura</td><td>${udmText}</td></tr>
+                ${righeMerceOmaggio}
                 <tr><td><b>Periodo Validità</b></td><td><span style="color:#d83b01;"><b>${stringaDettaglioValidita}</b></span></td></tr>
                 <tr style="background-color: #f9f9f9;"><td colspan="2"><b>DETTAGLI ECONOMICI</b></td></tr>
                 <tr><td>Tipo Importo</td><td>${tImporto}</td></tr>
