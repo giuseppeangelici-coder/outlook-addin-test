@@ -868,10 +868,12 @@ parseFloat(
 
 
 
+const ccArray = Array.from(ccRecipients);
+
 const messageFormOptions = {
-  subject: "Richiesta RV - " + cPdv + " - " + cRag,
+  subject: "...",
   htmlBody: htmlBody,
-cc: [...ccRecipients]
+  cc: ccArray
 };
 
 
@@ -887,6 +889,10 @@ messageFormOptions.attachments = [{
   name: originalSubject + " - Allegato procedura RV.eml"
 }];
         }
+alert(
+  "CC:\n" +
+  JSON.stringify(messageFormOptions.cc, null, 2)
+);
 
         Office.context.mailbox.displayNewMessageForm(messageFormOptions);
         log("Finestra email creata.");
