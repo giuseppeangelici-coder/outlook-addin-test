@@ -672,11 +672,22 @@ parseFloat(
           </html>
         `;
 
-        const messageFormOptions = {
-          subject: "Richiesta RV - " + cPdv + " - " + cRag,
-          htmlBody: htmlBody,
-          cc: cEmailRsm ? [cEmailRsm] : []
-        };
+        const ccRecipients = [];
+
+if (cEmailRsm) {
+  ccRecipients.push(cEmailRsm);
+}
+
+if (valLiquidare > 0) {
+  ccRecipients.push("contratti.clienti@partesa.it");
+}
+
+const messageFormOptions = {
+  subject: "Richiesta RV - " + cPdv + " - " + cRag,
+  htmlBody: htmlBody,
+  cc: ccRecipients
+};
+
 
         if (mode === "attach" && Office.context.mailbox.item && Office.context.mailbox.item.itemId) {
           const originalSubject =
