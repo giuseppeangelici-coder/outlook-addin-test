@@ -633,6 +633,15 @@ parseFloat(
         const cPdv = selectedCustomer.codPdV || selectedCustomer.CodPdV || "";
         const cRag = selectedCustomer.ragioneSociale || selectedCustomer.RagioneSociale || "";
         const cBu = selectedCustomer.codBU || selectedCustomer.CodBU || "";
+
+
+         const cEmailRsm =
+(
+  selectedCustomer.emailResponsabileCommerciale ||
+  selectedCustomer.EmailResponsabileCommerciale ||
+  ""
+).trim().toLowerCase();
+        
         const ccRecipients = new Set();
 
 if (cEmailRsm) {
@@ -708,12 +717,7 @@ switch(String(cBu).trim()) {
             </body>
           </html>
         `;
- const cEmailRsm =
-(
-  selectedCustomer.emailResponsabileCommerciale ||
-  selectedCustomer.EmailResponsabileCommerciale ||
-  ""
-).trim().toLowerCase();
+
 
         
         
