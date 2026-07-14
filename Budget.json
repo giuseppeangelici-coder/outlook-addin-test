@@ -12,7 +12,7 @@
     "ObbligoStima": "Falso"
   },
   {
-    "Budget": "ON TOP in cifra variabile \n(€ - pezzo -HL - collo )",
+    "Budget": "ON TOP in cifra variabile \n(â‚¬ - pezzo -HL - collo )",
     "ObbligoStima": "Falso"
   },
   {
@@ -21,6 +21,10 @@
   },
   {
     "Budget": "TRIANGOLATO",
+    "ObbligoStima": "Falso"
+  },
+  {
+    "Budget": "MERCE OMAGGIO",
     "ObbligoStima": "Falso"
   }
 ]
