@@ -16,7 +16,7 @@
 <title>Richiesta RV - Data Entry</title>
 <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
 <style>
-  body { font-family: 'Segoe UI', sans-serif; padding: 16px; font-size: 13px; color: #333; }
+  body { font-family: 'Segoe UI', sans-serif; padding: 16px; font-size: 12px; color: #333; }
   h2 { font-size: 15px; margin-bottom: 4px; color: #0078d4; }
   #modeLabel, #userLabel { color: #666; margin-bottom: 8px; font-size: 11px; }
   #userLabel { font-weight: bold; color: #107c41; margin-bottom: 16px; }
@@ -204,7 +204,14 @@
   <script>
     const APP_VERSION = "v1.7.1-FlowDataProvider";
     const POWER_AUTOMATE_URL = "https://default66e853deece344dd9d66ee6bdf4159.d4.environment.api.powerplatform.com/powerautomate/automations/direct/workflows/465577c70a414425a1f278e3c3f2bb43/triggers/manual/paths/invoke?api-version=1";
-    const MASTER_USERS = ["g.angelici@partesa.it"];
+    const MASTER_USERS = [
+  "g.angelici@partesa.it",
+  "f.corinti@partesa.it",
+  "g.paruzzolo@partesa.it",
+  "p.lorussi@partesa.it",
+  "f.difloriano@partesa.it",
+  "p.gualtieri@partesa.it"
+];
 
     let fullDatabase = [];      
     let filteredDatabase = [];  
@@ -626,6 +633,41 @@ parseFloat(
         const cPdv = selectedCustomer.codPdV || selectedCustomer.CodPdV || "";
         const cRag = selectedCustomer.ragioneSociale || selectedCustomer.RagioneSociale || "";
         const cBu = selectedCustomer.codBU || selectedCustomer.CodBU || "";
+        const ccRecipients = new Set();
+
+if (cEmailRsm) {
+  ccRecipients.add(cEmailRsm);
+}
+
+if (valLiquidare > 0) {
+  ccRecipients.add("contratti.clienti@partesa.it");
+}
+
+switch(String(cBu).trim()) {
+
+  case "6716":
+  case "6771":
+
+    ccRecipients.add("g.angelici@partesa.it");
+    ccRecipients.add("f.corinti@partesa.it");
+    break;
+
+  case "6734":
+  case "6724":
+  case "6772":
+
+    ccRecipients.add("g.paruzzolo@partesa.it");
+    ccRecipients.add("p.lorussi@partesa.it");
+    break;
+
+  case "6760":
+  case "6765":
+  case "6770":
+
+    ccRecipients.add("f.difloriano@partesa.it");
+    ccRecipients.add("p.gualtieri@partesa.it");
+    break;
+};
         const cVen = selectedCustomer.venditore || selectedCustomer.Venditore || "N/D";
         const cEmailRsm =
 (
@@ -672,7 +714,7 @@ parseFloat(
           </html>
         `;
 
-        const ccRecipients = [];
+        const ccRecipients = new Set();
 
 if (cEmailRsm) {
   ccRecipients.push(cEmailRsm);
