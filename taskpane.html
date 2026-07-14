@@ -1,9 +1,13 @@
 <!-- 
   ADD-IN RICHIESTE RV - TASKPANE COMPONENT
-  Version: 1.8.0-PowerAutomate-POST
-  Date: 2026-07-14
-  Changes: Sostituito displayNewMessageForm con chiamata POST HTTP asincrona
-           verso l'endpoint di Power Automate. Invio dell'intero payload JSON.
+  Version: 1.7.1-Simplified-FlowDataProvider
+  Date: 2026-07-13
+  Changes: Semplificata la gestione Pluriennale secondo feedback:
+           - Inizio: Mese dell'anno corrente (2026).
+           - Fine: Solo selezione dell'Anno.
+           - Eliminato calcolo pro-rata automatico in giorni.
+           - Aggiunto box di avviso/promemoria dinamico.
+           - Campo Note obbligatorio se viene scelto il Pluriennale.
 -->
 <!DOCTYPE html>
 <html>
@@ -12,7 +16,7 @@
 <title>Richiesta RV - Data Entry</title>
 <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
 <style>
-  body { font-family: 'Segoe UI', sans-serif; padding: 16px; font-size: 13px; color: #333; }
+  body { font-family: 'Segoe UI', sans-serif; padding: 16px; font-size: 12px; color: #333; }
   h2 { font-size: 15px; margin-bottom: 4px; color: #0078d4; }
   #modeLabel, #userLabel { color: #666; margin-bottom: 8px; font-size: 11px; }
   #userLabel { font-weight: bold; color: #107c41; margin-bottom: 16px; }
@@ -65,10 +69,15 @@
     <option value="">-- Seleziona Budget --</option>
   </select>
 
+   <!-- 3.1. TIPOLOGIA INTERVENTO -->
+  <label for="inputTipologia">Tipologia Intervento (Cerca linea/prodotto)</label>
+  <input type="text" id="inputTipologia" list="listaTipologie" placeholder="Digita una tipologia o selezionala dall'elenco..." disabled>
+  <datalist id="listaTipologie"></datalist>
+
   <!-- 4. FORNITORE -->
   <label for="selectFornitore">Fornitore</label>
   <select id="selectFornitore" disabled>
-    <option value="">-- Seleziona o cerca per tipologia sotto --</option>
+    <option value="">-- Selezionato automaticamente da Tipologia --</option>
   </select>
 
   <!-- 5. PERIODO VALIDITÀ -->
@@ -93,7 +102,7 @@
     <input type="date" id="dataFineAnnuale">
   </div>
 
-  <!-- SUB-SEZIONE 2: PLURIENNALE -->
+  <!-- SUB-SEZIONE 2: PLURIENNALE (AGGIORNATA) -->
   <div id="sezPluriennale" class="sez-validita" style="border-left: 3px solid #d83b01;">
     <label for="meseInizioPluri" style="margin-top: 0;">Mese Partenza (Anno Corrente 2026)</label>
     <select id="meseInizioPluri">
@@ -149,10 +158,7 @@
     </select>
   </div>
 
-  <!-- 6. TIPOLOGIA INTERVENTO -->
-  <label for="inputTipologia">Tipologia Intervento (Cerca linea/prodotto)</label>
-  <input type="text" id="inputTipologia" list="listaTipologie" placeholder="Seleziona prima il fornitore o digita qui..." disabled>
-  <datalist id="listaTipologie"></datalist>
+ 
 
   <!-- 7. CONDIZIONATO: QUANTITÀ E COLLI -->
   <div id="sezioneStima" style="display: none; margin-top: 12px; padding: 10px; background: #f9f9f9; border-left: 3px solid #0078d4;">
@@ -191,14 +197,21 @@
     <textarea id="noteIntervento" placeholder="Inserisci qui eventuali note, dettagli o la ripartizione pluriennale..." disabled></textarea>
   </div>
 
-  <button id="submitBtn" disabled>Invia Richiesta RV</button>
+  <button id="submitBtn" disabled>Genera Richiesta RV</button>
 
   <div id="log">Log eventi...</div>
 
   <script>
-    const APP_VERSION = "v1.8.0-PowerAutomate-POST";
-    const MASTER_USERS = ["g.angelici@partesa.it"];
-    const POWER_AUTOMATE_URL = "https://default66e853deece344dd9d66ee6bdf4159.d4.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/465577c70a414425a1f278e3c3f2bb43/triggers/manual/paths/invoke?api-version=1";
+    const APP_VERSION = "v1.7.1-FlowDataProvider";
+    const POWER_AUTOMATE_URL = "https://default66e853deece344dd9d66ee6bdf4159.d4.environment.api.powerplatform.com/powerautomate/automations/direct/workflows/465577c70a414425a1f278e3c3f2bb43/triggers/manual/paths/invoke?api-version=1";
+    const MASTER_USERS = [
+  "g.angelici@partesa.it",
+  "f.corinti@partesa.it",
+  "g.paruzzolo@partesa.it",
+  "p.lorussi@partesa.it",
+  "f.difloriano@partesa.it",
+  "p.gualtieri@partesa.it"
+];
 
     let fullDatabase = [];      
     let filteredDatabase = [];  
@@ -206,7 +219,6 @@
     let budgetDb = [];
     let selectedCustomer = null; 
     let highlightedIndex = -1;
-    let currentUserEmail = "";
 
     function log(msg) {
       const el = document.getElementById("log");
@@ -219,15 +231,16 @@
       const mode = params.get("mode") || "general";
       
       const submitBtn = document.getElementById("submitBtn");
-      submitBtn.textContent = "Invia Richiesta a Power Automate";
+      submitBtn.textContent = mode === "attach" ? "Allega e Invia Richiesta RV" : "Apri e Invia Richiesta RV";
       document.getElementById("modeLabel").textContent = "Versione: " + APP_VERSION + " | Modalità: " + mode + " | Host: " + info.host;
 
+      let userEmail = "";
       if (Office.context.mailbox && Office.context.mailbox.userProfile) {
-        currentUserEmail = Office.context.mailbox.userProfile.emailAddress.toLowerCase().trim();
+        userEmail = Office.context.mailbox.userProfile.emailAddress.toLowerCase().trim();
       } else {
-        currentUserEmail = "giuseppe.angelici@partesa.it"; 
+        userEmail = "giuseppe.angelici@partesa.it"; 
       }
-      document.getElementById("userLabel").textContent = "Utente: " + currentUserEmail;
+      document.getElementById("userLabel").textContent = "Utente: " + userEmail;
 
       const urlClienti = "https://giuseppeangelici-coder.github.io/outlook-addin-test/QryCustomerMaster.json";
       const urlFornitori = "https://giuseppeangelici-coder.github.io/outlook-addin-test/FornitoriTipologie.json";
@@ -249,7 +262,7 @@
         budgetDb = await resBudget.json();
 
         log("Database caricati.");
-        applyRowLevelSecurity(currentUserEmail);
+        applyRowLevelSecurity(userEmail);
         popolaFornitoriUnivoci();
         popolaBudget();
         setupGestioneValidita();
@@ -332,6 +345,7 @@
         const tImporto = document.getElementById("tipoImporto").value;
         const reqNote = document.getElementById("reqNote");
 
+        // Note obbligatorie se Pluriennale OPPURE se Importo è Variabile
         if (tipoValidita === "pluriennale" || tImporto === "Variabile") {
           reqNote.style.display = "inline";
         } else {
@@ -377,6 +391,9 @@
 
         function allineaVincoliAnnoAnnuale() {
           const anno = annoAnnuale.value;
+          if (!dataFineAnnuale.value) {
+   dataFineAnnuale.value = `${anno}-12-31`;
+}
           dataInizioAnnuale.min = `${anno}-01-01`; dataInizioAnnuale.max = `${anno}-12-31`;
           dataFineAnnuale.min = `${anno}-01-01`; dataFineAnnuale.max = `${anno}-12-31`;
           if (dataInizioAnnuale.value && !dataInizioAnnuale.value.startsWith(anno)) dataInizioAnnuale.value = "";
@@ -504,7 +521,18 @@
           items[highlightedIndex].scrollIntoView({ block: "nearest" });
         }
       }
+function formatDateIT(dataString) {
 
+  if (!dataString) return "";
+
+  const d = new Date(dataString);
+
+  const gg = String(d.getDate()).padStart(2,"0");
+  const mm = String(d.getMonth()+1).padStart(2,"0");
+  const aa = d.getFullYear();
+
+  return `${gg}/${mm}/${aa}`;
+}
       function selectCustomer(customer) {
         suggestionsList.style.display = "none";
         highlightedIndex = -1;
@@ -526,8 +554,8 @@
         log("Cliente " + (customer.codPdV || customer.CodPdV) + " agganciato.");
       }
 
-      // SUBMIT CON FETCH POST A POWER AUTOMATE
-      submitBtn.addEventListener("click", async () => {
+      // SUBMIT E GENERAZIONE EMAIL
+      submitBtn.addEventListener("click", () => {
         if (!selectedCustomer) return;
 
         // Validazione budget condizionale
@@ -549,11 +577,12 @@
         }
 
         let stringaDettaglioValidita = "";
+
         if (tipoValidita === "annuale") {
           const dIn = document.getElementById("dataInizioAnnuale").value;
           const dFi = document.getElementById("dataFineAnnuale").value;
           if (!dIn || !dFi) { alert("Errore: Inserire le date per il periodo annuale."); return; }
-          stringaDettaglioValidita = `Annuale (Anno ref: ${document.getElementById("annoAnnuale").value}) - Dal ${dIn} al ${dFi}`;
+          stringaDettaglioValidita = `Annuale (Anno ref: ${document.getElementById("annoAnnuale").value}) - Dal ${formatDateIT(dIn)} al ${formatDateIT(dFi)}`;
         } 
         else if (tipoValidita === "pluriennale") {
           const mIn = document.getElementById("meseInizioPluri").value;
@@ -570,7 +599,10 @@
         // VERIFICHE ECONOMICHE E NOTE
         const tImporto = document.getElementById("tipoImporto").value;
         const valReintegrato = parseFloat(document.getElementById("importoReintegrato").value);
-        const valLiquidare = parseFloat(document.getElementById("importoLiquidare").value);
+        const valLiquidare =
+parseFloat(
+ document.getElementById("importoLiquidare").value || "0"
+);
         const txtNote = document.getElementById("noteIntervento").value.trim();
 
         if (isNaN(valReintegrato) || valReintegrato <= 0) {
@@ -578,11 +610,12 @@
           return;
         }
 
-        if (isNaN(valLiquidare) || valLiquidare <= 0) {
-          alert("Errore: L'Importo da Liquidare deve essere compilato e maggiore di 0.");
+        if (isNaN(valLiquidare) || valLiquidare < 0) {
+          alert("Errore: l'Importo da Liquidare non può essere negativo.");
           return;
         }
 
+        // Controllo coerenza note obbligatorie
         if (tipoValidita === "pluriennale" && txtNote === "") {
           alert("Errore: Per i contratti Pluriennali è obbligatorio specificare la ripartizione economica per anno nel campo Note.");
           return;
@@ -592,16 +625,51 @@
           return;
         }
 
-        let txtExtra = "0.00";
+        let txtExtra = "Nessuno";
         if (valLiquidare > valReintegrato) {
-          txtExtra = (valLiquidare - valReintegrato).toFixed(2);
+          txtExtra = (valLiquidare - valReintegrato).toFixed(2) + " €";
         }
 
         const cPdv = selectedCustomer.codPdV || selectedCustomer.CodPdV || "";
         const cRag = selectedCustomer.ragioneSociale || selectedCustomer.RagioneSociale || "";
         const cBu = selectedCustomer.codBU || selectedCustomer.CodBU || "";
+        const ccRecipients = new Set();
+
+if (cEmailRsm) {
+  ccRecipients.add(cEmailRsm);
+}
+
+if (valLiquidare > 0) {
+  ccRecipients.add("contratti.clienti@partesa.it");
+}
+
+switch(String(cBu).trim()) {
+
+  case "6716":
+  case "6771":
+
+    ccRecipients.add("g.angelici@partesa.it");
+    ccRecipients.add("f.corinti@partesa.it");
+    break;
+
+  case "6734":
+  case "6724":
+  case "6772":
+
+    ccRecipients.add("g.paruzzolo@partesa.it");
+    ccRecipients.add("p.lorussi@partesa.it");
+    break;
+
+  case "6760":
+  case "6765":
+  case "6770":
+
+    ccRecipients.add("f.difloriano@partesa.it");
+    ccRecipients.add("p.gualtieri@partesa.it");
+    break;
+};
         const cVen = selectedCustomer.venditore || selectedCustomer.Venditore || "N/D";
-        const cEmailRsm = selectedCustomer.emailResponsabileCommerciale || selectedCustomer.EmailResponsabileCommerciale || "";
+       
         
         const budgetScelto = document.getElementById("selectBudget").value || "N/D";
         const qStimaText = quantitaStima.required ? quantitaStima.value : "Non richiesta";
@@ -611,53 +679,69 @@
         const fornitoreOpt = selectFornitore.options[selectFornitore.selectedIndex];
         const fornitoreScelto = fornitoreOpt ? fornitoreOpt.textContent : "Non specificato";
 
-        // Costruzione del Payload JSON strutturato per il flusso
-        const payload = {
-          richiedente: currentUserEmail,
-          codicePdV: cPdv,
-          ragioneSociale: cRag,
-          businessUnit: cBu,
-          gruppo: gruppoScelto,
-          fornitore: fornitoreScelto,
-          tipologiaIntervento: tipologiaScelta,
-          budget: budgetScelto,
-          quantitaStima: qStimaText,
-          unitaMisura: udmText,
-          periodoValiditaText: stringaDettaglioValidita,
-          tipoValidita: tipoValidita,
-          tipoImporto: tImporto,
-          importoReintegrato: valReintegrato.toFixed(2),
-          importoLiquidare: valLiquidare.toFixed(2),
-          importoExtra: txtExtra,
-          note: txtNote ? txtNote : "Nessuna nota inserita",
-          venditore: cVen,
-          emailRsm: cEmailRsm,
-          timestamp: new Date().toISOString()
-        };
+        const htmlBody = `
+          <html>
+            <body>
+              <p>Richiesta di attivazione procedura RV per il seguente punto vendita:</p>
+              <table border="1" cellpadding="6" style="border-collapse: collapse; font-family: Calibri, sans-serif;">
+                <tr style="background-color: #f2f2f2;"><td><b>Campo</b></td><td><b>Valore</b></td></tr>
+                <tr><td>Codice PdV</td><td>${cPdv}</td></tr>
+                <tr><td>Ragione Sociale</td><td>${cRag}</td></tr>
+                <tr><td>Region</td><td>${cBu}</td></tr>
+                <tr><td>Gruppo</td><td><b>${gruppoScelto}</b></td></tr>
+                <tr><td>Fornitore Selezionato</td><td>${fornitoreScelto}</td></tr>
+                <tr><td>Tipologia Intervento</td><td>${tipologiaScelta}</td></tr>
+                <tr><td>Budget</td><td>${budgetScelto}</td></tr>
+                <tr><td>Quantità Stima</td><td>${qStimaText}</td></tr>
+                <tr><td>Unità di Misura</td><td>${udmText}</td></tr>
+                <tr><td><b>Periodo Validità</b></td><td><span style="color:#d83b01;"><b>${stringaDettaglioValidita}</b></span></td></tr>
+                <tr style="background-color: #f9f9f9;"><td colspan="2"><b>DETTAGLI ECONOMICI</b></td></tr>
+                <tr><td>Tipo Importo</td><td>${tImporto}</td></tr>
+                <tr><td>Importo Reintegrato</td><td>${valReintegrato.toFixed(2)} €</td></tr>
+                <tr><td>Importo da Liquidare</td><td>${valLiquidare.toFixed(2)} €</td></tr>
+                <tr><td>Importo Extra Non Coperto</td><td><span style="color:#d83b01; font-weight:bold;">${txtExtra}</span></td></tr>
+                <tr><td>Note / Giustificativo Ripartizione</td><td>${txtNote ? txtNote : "Nessuna nota inserita"}</td></tr>
+                <tr style="background-color: #f9f9f9;"><td colspan="2"></td></tr>
+                <tr><td>Venditore</td><td>${cVen}</td></tr>
+              </table>
+              <p style="font-size: 11px; color: #666;">Generato tramite Outlook Add-in ${APP_VERSION}</p>
+            </body>
+          </html>
+        `;
+ const cEmailRsm =
+(
+  selectedCustomer.emailResponsabileCommerciale ||
+  selectedCustomer.EmailResponsabileCommerciale ||
+  ""
+).trim().toLowerCase();
 
-        submitBtn.disabled = true;
-        log("Invio dati a Power Automate in corso...");
+        
+        
 
-        try {
-          const response = await fetch(POWER_AUTOMATE_URL, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify(payload)
-          });
 
-          if (response.ok) {
-            log("SUCCESS: Richiesta inviata correttamente a Power Automate.");
-            alert("Richiesta RV inviata con successo!");
-          } else {
-            throw new Error(`Risposta del server non valida (Stato: ${response.status})`);
-          }
-        } catch (error) {
-          log("ERRORE INVIO FLUSSO: " + error.message);
-          alert("Si è verificato un errore durante l'invio al flusso Power Automate. Verifica il log in basso.");
-          submitBtn.disabled = false;
+
+const messageFormOptions = {
+  subject: "Richiesta RV - " + cPdv + " - " + cRag,
+  htmlBody: htmlBody,
+cc: [...ccRecipients]
+};
+
+
+        if (mode === "attach" && Office.context.mailbox.item && Office.context.mailbox.item.itemId) {
+          const originalSubject =
+(Office.context.mailbox.item.subject || "Messaggio originale")
+.replace(/[\\/:*?"<>|]/g, "-");
+
+
+messageFormOptions.attachments = [{
+  type: "item",
+  itemId: Office.context.mailbox.item.itemId,
+  name: originalSubject + " - Allegato procedura RV.eml"
+}];
         }
+
+        Office.context.mailbox.displayNewMessageForm(messageFormOptions);
+        log("Finestra email creata.");
       });
     });
   </script>
