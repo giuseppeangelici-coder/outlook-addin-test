@@ -611,7 +611,7 @@ parseFloat(
         }
 
         if (isNaN(valLiquidare) || valLiquidare < 0) {
-          alert("Errore: L'Importo da Liquidare deve essere compilato e maggiore di 0.");
+          alert("Errore: l'Importo da Liquidare non può essere negativo.");
           return;
         }
 
@@ -669,12 +669,7 @@ switch(String(cBu).trim()) {
     break;
 };
         const cVen = selectedCustomer.venditore || selectedCustomer.Venditore || "N/D";
-        const cEmailRsm =
-(
-  selectedCustomer.emailResponsabileCommerciale ||
-  selectedCustomer.EmailResponsabileCommerciale ||
-  ""
-).trim().toLowerCase();
+       
         
         const budgetScelto = document.getElementById("selectBudget").value || "N/D";
         const qStimaText = quantitaStima.required ? quantitaStima.value : "Non richiesta";
@@ -713,15 +708,22 @@ switch(String(cBu).trim()) {
             </body>
           </html>
         `;
+ const cEmailRsm =
+(
+  selectedCustomer.emailResponsabileCommerciale ||
+  selectedCustomer.EmailResponsabileCommerciale ||
+  ""
+).trim().toLowerCase();
 
-        const ccRecipients = new Set();
+        
+        
 
 if (cEmailRsm) {
-  ccRecipients.push(cEmailRsm);
+  ccRecipients.add(cEmailRsm);
 }
 
 if (valLiquidare > 0) {
-  ccRecipients.push("contratti.clienti@partesa.it");
+  ccRecipients.add("contratti.clienti@partesa.it");
 }
 
 const messageFormOptions = {
