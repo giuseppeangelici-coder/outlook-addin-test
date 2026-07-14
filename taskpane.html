@@ -69,10 +69,15 @@
     <option value="">-- Seleziona Budget --</option>
   </select>
 
+   <!-- 3.1. TIPOLOGIA INTERVENTO -->
+  <label for="inputTipologia">Tipologia Intervento (Cerca linea/prodotto)</label>
+  <input type="text" id="inputTipologia" list="listaTipologie" placeholder="Digita una tipologia o selezionala dall'elenco..." disabled>
+  <datalist id="listaTipologie"></datalist>
+
   <!-- 4. FORNITORE -->
   <label for="selectFornitore">Fornitore</label>
   <select id="selectFornitore" disabled>
-    <option value="">-- Seleziona o cerca per tipologia sotto --</option>
+    <option value="">-- Selezionato automaticamente da Tipologia --</option>
   </select>
 
   <!-- 5. PERIODO VALIDITÀ -->
@@ -153,10 +158,7 @@
     </select>
   </div>
 
-  <!-- 6. TIPOLOGIA INTERVENTO -->
-  <label for="inputTipologia">Tipologia Intervento (Cerca linea/prodotto)</label>
-  <input type="text" id="inputTipologia" list="listaTipologie" placeholder="Seleziona prima il fornitore o digita qui..." disabled>
-  <datalist id="listaTipologie"></datalist>
+ 
 
   <!-- 7. CONDIZIONATO: QUANTITÀ E COLLI -->
   <div id="sezioneStima" style="display: none; margin-top: 12px; padding: 10px; background: #f9f9f9; border-left: 3px solid #0078d4;">
@@ -382,6 +384,9 @@
 
         function allineaVincoliAnnoAnnuale() {
           const anno = annoAnnuale.value;
+          if (!dataFineAnnuale.value) {
+   dataFineAnnuale.value = `${anno}-12-31`;
+}
           dataInizioAnnuale.min = `${anno}-01-01`; dataInizioAnnuale.max = `${anno}-12-31`;
           dataFineAnnuale.min = `${anno}-01-01`; dataFineAnnuale.max = `${anno}-12-31`;
           if (dataInizioAnnuale.value && !dataInizioAnnuale.value.startsWith(anno)) dataInizioAnnuale.value = "";
@@ -509,7 +514,18 @@
           items[highlightedIndex].scrollIntoView({ block: "nearest" });
         }
       }
+function formatDateIT(dataString) {
 
+  if (!dataString) return "";
+
+  const d = new Date(dataString);
+
+  const gg = String(d.getDate()).padStart(2,"0");
+  const mm = String(d.getMonth()+1).padStart(2,"0");
+  const aa = d.getFullYear();
+
+  return `${gg}/${mm}/${aa}`;
+}
       function selectCustomer(customer) {
         suggestionsList.style.display = "none";
         highlightedIndex = -1;
@@ -559,7 +575,7 @@
           const dIn = document.getElementById("dataInizioAnnuale").value;
           const dFi = document.getElementById("dataFineAnnuale").value;
           if (!dIn || !dFi) { alert("Errore: Inserire le date per il periodo annuale."); return; }
-          stringaDettaglioValidita = `Annuale (Anno ref: ${document.getElementById("annoAnnuale").value}) - Dal ${dIn} al ${dFi}`;
+          stringaDettaglioValidita = `Annuale (Anno ref: ${document.getElementById("annoAnnuale").value}) - Dal ${formatDateIT(dIn)} al ${formatDateIT(dFi)}`;
         } 
         else if (tipoValidita === "pluriennale") {
           const mIn = document.getElementById("meseInizioPluri").value;
@@ -576,7 +592,10 @@
         // VERIFICHE ECONOMICHE E NOTE
         const tImporto = document.getElementById("tipoImporto").value;
         const valReintegrato = parseFloat(document.getElementById("importoReintegrato").value);
-        const valLiquidare = parseFloat(document.getElementById("importoLiquidare").value);
+        const valLiquidare =
+parseFloat(
+ document.getElementById("importoLiquidare").value || "0"
+);
         const txtNote = document.getElementById("noteIntervento").value.trim();
 
         if (isNaN(valReintegrato) || valReintegrato <= 0) {
@@ -584,7 +603,7 @@
           return;
         }
 
-        if (isNaN(valLiquidare) || valLiquidare <= 0) {
+        if (isNaN(valLiquidare) || valLiquidare < 0) {
           alert("Errore: L'Importo da Liquidare deve essere compilato e maggiore di 0.");
           return;
         }
@@ -608,7 +627,12 @@
         const cRag = selectedCustomer.ragioneSociale || selectedCustomer.RagioneSociale || "";
         const cBu = selectedCustomer.codBU || selectedCustomer.CodBU || "";
         const cVen = selectedCustomer.venditore || selectedCustomer.Venditore || "N/D";
-        const cEmailRsm = selectedCustomer.emailResponsabileCommerciale || selectedCustomer.EmailResponsabileCommerciale || "";
+        const cEmailRsm =
+(
+  selectedCustomer.emailResponsabileCommerciale ||
+  selectedCustomer.EmailResponsabileCommerciale ||
+  ""
+).trim().toLowerCase();
         
         const budgetScelto = document.getElementById("selectBudget").value || "N/D";
         const qStimaText = quantitaStima.required ? quantitaStima.value : "Non richiesta";
@@ -626,7 +650,7 @@
                 <tr style="background-color: #f2f2f2;"><td><b>Campo</b></td><td><b>Valore</b></td></tr>
                 <tr><td>Codice PdV</td><td>${cPdv}</td></tr>
                 <tr><td>Ragione Sociale</td><td>${cRag}</td></tr>
-                <tr><td>Business Unit</td><td>${cBu}</td></tr>
+                <tr><td>Region</td><td>${cBu}</td></tr>
                 <tr><td>Gruppo</td><td><b>${gruppoScelto}</b></td></tr>
                 <tr><td>Fornitore Selezionato</td><td>${fornitoreScelto}</td></tr>
                 <tr><td>Tipologia Intervento</td><td>${tipologiaScelta}</td></tr>
