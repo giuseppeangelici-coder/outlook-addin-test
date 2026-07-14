@@ -216,20 +216,22 @@
   <div id="sezioneEconomica" class="sez-economica" style="border-left: 3px solid #8660a9;">
     <h3 style="margin: 0 0 10px 0; font-size: 13px; color: #8660a9;">Dati Economici & Note</h3>
     
-    <label for="tipoImporto" style="margin-top: 0;">Tipo Importo</label>
-    <select id="tipoImporto" disabled>
-      <option value="Fisso">Fisso</option>
-      <option value="Variabile">Variabile</option>
-    </select>
+    <div id="pannelloImporti">
+      <label for="tipoImporto" style="margin-top: 0;">Tipo Importo</label>
+      <select id="tipoImporto" disabled>
+        <option value="Fisso">Fisso</option>
+        <option value="Variabile">Variabile</option>
+      </select>
 
-    <label for="importoReintegrato">Importo Reintegrato (€)</label>
-    <input type="number" id="importoReintegrato" step="0.01" min="0.01" placeholder="Valore maggiore di 0..." disabled>
+      <label for="importoReintegrato">Importo Reintegrato (€)</label>
+      <input type="number" id="importoReintegrato" step="0.01" min="0.01" placeholder="Valore maggiore di 0..." disabled>
 
-    <label for="importoLiquidare">Importo da Liquidare (€)</label>
-    <input type="number" id="importoLiquidare" step="0.01" min="0" placeholder="Inserire 0 oppure un valore maggiore di 0..." disabled>
+      <label for="importoLiquidare">Importo da Liquidare (€)</label>
+      <input type="number" id="importoLiquidare" step="0.01" min="0" placeholder="Inserire 0 oppure un valore maggiore di 0..." disabled>
 
-    <label for="importoExtra">Importo Extra Non Coperto (€)</label>
-    <input type="text" id="importoExtra" placeholder="Calcolato automaticamente..." readonly style="background: #f3f3f3; font-weight: bold; color: #d83b01;">
+      <label for="importoExtra">Importo Extra Non Coperto (€)</label>
+      <input type="text" id="importoExtra" placeholder="Calcolato automaticamente..." readonly style="background: #f3f3f3; font-weight: bold; color: #d83b01;">
+    </div>
 
     <label for="noteIntervento">Note <span id="reqNote" style="color: red; display: none;">(Obbligatorio)</span></label>
     <textarea id="noteIntervento" placeholder="Inserisci qui eventuali note, dettagli o la ripartizione pluriennale..." disabled></textarea>
@@ -240,7 +242,7 @@
   <div id="log">Log eventi...</div>
 
   <script>
-    const APP_VERSION = "v1.7.3-Merce-Omaggio";
+    const APP_VERSION = "v1.7.4-Region-Merce-Omaggio";
     const POWER_AUTOMATE_URL = "https://default66e853deece344dd9d66ee6bdf4159.d4.environment.api.powerplatform.com/powerautomate/automations/direct/workflows/465577c70a414425a1f278e3c3f2bb43/triggers/manual/paths/invoke?api-version=1";
     const MASTER_USERS = [
   "g.angelici@partesa.it",
@@ -266,6 +268,19 @@
 
     function normalizzaTesto(valore) {
       return String(valore || "").trim().toUpperCase();
+    }
+
+    function estraiCodiceRegion(customer) {
+      const valoreRegion =
+        customer.region ?? customer.Region ??
+        customer.codRegion ?? customer.CodRegion ??
+        customer.codiceRegion ?? customer.CodiceRegion ??
+        customer.codBU ?? customer.CodBU ??
+        customer.bu ?? customer.BU ?? "";
+
+      const testo = String(valoreRegion).trim();
+      const matchCodice = testo.match(/\b(6716|6771|6734|6724|6772|6765|6770|6760)\b/);
+      return matchCodice ? matchCodice[1] : testo;
     }
 
     function aggiungiDestinatariCondizionali(ccRecipients, region, budgetScelto, importoDaLiquidare) {
@@ -404,6 +419,11 @@
           const sezioneMerceOmaggio = document.getElementById("sezioneMerceOmaggio");
           const codArticolo1 = document.getElementById("codArticolo1");
           const qtaArticolo1 = document.getElementById("qtaArticolo1");
+          const pannelloImporti = document.getElementById("pannelloImporti");
+          const tipoImporto = document.getElementById("tipoImporto");
+          const importoReintegrato = document.getElementById("importoReintegrato");
+          const importoLiquidare = document.getElementById("importoLiquidare");
+          const importoExtra = document.getElementById("importoExtra");
 
           const obbligoStima = match && (match.ObbligoStima === true || String(match.ObbligoStima).toLowerCase() === "vero" || String(match.ObbligoStima).toLowerCase() === "true");
 
@@ -424,6 +444,20 @@
           codArticolo1.required = isMerceOmaggio;
           qtaArticolo1.required = isMerceOmaggio;
 
+          pannelloImporti.style.display = isMerceOmaggio ? "none" : "block";
+          tipoImporto.disabled = isMerceOmaggio;
+          importoReintegrato.disabled = isMerceOmaggio;
+          importoLiquidare.disabled = isMerceOmaggio;
+
+          if (isMerceOmaggio) {
+            tipoImporto.value = "Fisso";
+            importoReintegrato.value = "";
+            importoLiquidare.value = "";
+            importoExtra.value = "";
+          }
+
+          rinfrescaObbligatorietaNote();
+
           if (!isMerceOmaggio) {
             for (let i = 1; i <= 3; i++) {
               document.getElementById(`codArticolo${i}`).value = "";
@@ -439,7 +473,8 @@
         const reqNote = document.getElementById("reqNote");
 
         // Note obbligatorie se Pluriennale OPPURE se Importo è Variabile
-        if (tipoValidita === "pluriennale" || tImporto === "Variabile") {
+        const isMerceOmaggio = normalizzaTesto(document.getElementById("selectBudget").value) === "MERCE OMAGGIO";
+        if (tipoValidita === "pluriennale" || (!isMerceOmaggio && tImporto === "Variabile")) {
           reqNote.style.display = "inline";
         } else {
           reqNote.style.display = "none";
@@ -638,9 +673,10 @@ function formatDateIT(dataString) {
         inputTipologia.disabled = false;
         document.getElementById("gruppoCliente").disabled = false;
         
-        document.getElementById("tipoImporto").disabled = false;
-        document.getElementById("importoReintegrato").disabled = false;
-        document.getElementById("importoLiquidare").disabled = false;
+        const clienteMerceOmaggio = normalizzaTesto(document.getElementById("selectBudget").value) === "MERCE OMAGGIO";
+        document.getElementById("tipoImporto").disabled = clienteMerceOmaggio;
+        document.getElementById("importoReintegrato").disabled = clienteMerceOmaggio;
+        document.getElementById("importoLiquidare").disabled = clienteMerceOmaggio;
         document.getElementById("noteIntervento").disabled = false;
         
         submitBtn.disabled = false;
@@ -738,20 +774,17 @@ function formatDateIT(dataString) {
         }
 
         // VERIFICHE ECONOMICHE E NOTE
-        const tImporto = document.getElementById("tipoImporto").value;
-        const valReintegrato = parseFloat(document.getElementById("importoReintegrato").value);
-        const valLiquidare =
-parseFloat(
- document.getElementById("importoLiquidare").value || "0"
-);
+        const tImporto = isMerceOmaggio ? "Non applicabile" : document.getElementById("tipoImporto").value;
+        const valReintegrato = isMerceOmaggio ? 0 : parseFloat(document.getElementById("importoReintegrato").value);
+        const valLiquidare = isMerceOmaggio ? 0 : parseFloat(document.getElementById("importoLiquidare").value || "0");
         const txtNote = document.getElementById("noteIntervento").value.trim();
 
-        if (isNaN(valReintegrato) || valReintegrato <= 0) {
+        if (!isMerceOmaggio && (isNaN(valReintegrato) || valReintegrato <= 0)) {
           alert("Errore: L'Importo Reintegrato deve essere compilato e maggiore di 0.");
           return;
         }
 
-        if (isNaN(valLiquidare) || valLiquidare < 0) {
+        if (!isMerceOmaggio && (isNaN(valLiquidare) || valLiquidare < 0)) {
           alert("Errore: l'Importo da Liquidare non può essere negativo.");
           return;
         }
@@ -761,7 +794,7 @@ parseFloat(
           alert("Errore: Per i contratti Pluriennali è obbligatorio specificare la ripartizione economica per anno nel campo Note.");
           return;
         }
-        if (tImporto === "Variabile" && txtNote === "") {
+        if (!isMerceOmaggio && tImporto === "Variabile" && txtNote === "") {
           alert("Errore: Il campo Note è obbligatorio quando il tipo di importo è Variabile.");
           return;
         }
@@ -773,7 +806,7 @@ parseFloat(
 
         const cPdv = selectedCustomer.codPdV || selectedCustomer.CodPdV || "";
         const cRag = selectedCustomer.ragioneSociale || selectedCustomer.RagioneSociale || "";
-        const cBu = selectedCustomer.codBU || selectedCustomer.CodBU || "";
+        const cBu = estraiCodiceRegion(selectedCustomer);
 
 
          const cEmailRsm =
@@ -791,6 +824,7 @@ parseFloat(
 
         const budgetScelto = budgetSelezionato;
         aggiungiDestinatariCondizionali(ccRecipients, cBu, budgetScelto, valLiquidare);
+        log("Region rilevata: " + cBu + " | CC: " + [...ccRecipients].join(", "));
 
         const cVen = selectedCustomer.venditore || selectedCustomer.Venditore || "N/D";
        
@@ -829,11 +863,12 @@ parseFloat(
                 <tr><td>Unità di Misura</td><td>${udmText}</td></tr>
                 ${righeMerceOmaggio}
                 <tr><td><b>Periodo Validità</b></td><td><span style="color:#d83b01;"><b>${stringaDettaglioValidita}</b></span></td></tr>
+                ${isMerceOmaggio ? "" : `
                 <tr style="background-color: #f9f9f9;"><td colspan="2"><b>DETTAGLI ECONOMICI</b></td></tr>
                 <tr><td>Tipo Importo</td><td>${tImporto}</td></tr>
                 <tr><td>Importo Reintegrato</td><td>${valReintegrato.toFixed(2)} €</td></tr>
                 <tr><td>Importo da Liquidare</td><td>${valLiquidare.toFixed(2)} €</td></tr>
-                <tr><td>Importo Extra Non Coperto</td><td><span style="color:#d83b01; font-weight:bold;">${txtExtra}</span></td></tr>
+                <tr><td>Importo Extra Non Coperto</td><td><span style="color:#d83b01; font-weight:bold;">${txtExtra}</span></td></tr>`}
                 <tr><td>Note / Giustificativo Ripartizione</td><td>${txtNote ? txtNote : "Nessuna nota inserita"}</td></tr>
                 <tr style="background-color: #f9f9f9;"><td colspan="2"></td></tr>
                 <tr><td>Venditore</td><td>${cVen}</td></tr>
@@ -852,7 +887,7 @@ parseFloat(
 const messageFormOptions = {
   subject: "Richiesta RV - " + cPdv + " - " + cRag,
   htmlBody: htmlBody,
-cc: [...ccRecipients]
+ccRecipients: [...ccRecipients]
 };
 
 
