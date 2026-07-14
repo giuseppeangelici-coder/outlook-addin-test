@@ -679,11 +679,16 @@ parseFloat(
         };
 
         if (mode === "attach" && Office.context.mailbox.item && Office.context.mailbox.item.itemId) {
-          messageFormOptions.attachments = [{
-            type: "item",
-            itemId: Office.context.mailbox.item.itemId,
-            name: "Messaggio originario RV - " + cPdv + ".eml"
-          }];
+          const originalSubject =
+(Office.context.mailbox.item.subject || "Messaggio originale")
+.replace(/[\\/:*?"<>|]/g, "-");
+
+
+messageFormOptions.attachments = [{
+  type: "item",
+  itemId: Office.context.mailbox.item.itemId,
+  name: originalSubject + " - Allegato procedura RV.eml"
+}];
         }
 
         Office.context.mailbox.displayNewMessageForm(messageFormOptions);
