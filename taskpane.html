@@ -247,21 +247,35 @@
       const urlBudget = "https://giuseppeangelici-coder.github.io/outlook-addin-test/Budget.json";
 
       try {
-        const [resClienti, resFornitori, resBudget] = await Promise.all([
-          fetch(urlClienti),
-          fetch(urlFornitori),
-          fetch(urlBudget)
-        ]);
+        log("Inizio chiamata a Power Automate...");
 
-        if (!resClienti.ok) throw new Error("Errore database clienti");
-        if (!resFornitori.ok) throw new Error("Errore database fornitori");
-        if (!resBudget.ok) throw new Error("Errore database budget");
+        const responsePA = await fetch(POWER_AUTOMATE_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ action: "get_database" }) // Corpo della richiesta (può essere anche vuoto {})
+        });
 
-        fullDatabase = await resClienti.json();
-        fornitoreTipologiaDb = await resFornitori.json();
-        budgetDb = await resBudget.json();
+        if (!responsePA.ok) {
+          throw new Error("Errore risposta Power Automate: STATUS " + responsePA.status);
+        }
 
-        log("Database caricati.");
+        // Convertiamo la risposta in JSON
+        const dataFromPA = await responsePA.json();
+        log("Risposta ricevuta da Power Automate con successo.");
+
+        // ASSEGNAZIONE DEI DATI
+        // Nota: Qui assumiamo che Power Automate ti restituisca un oggetto JSON che contiene i 3 database, 
+        // ad esempio: { clienti: [...], fornitori: [...], budget: [...] }
+        // Modifica le chiavi (.clienti, .fornitori, .budget) in base a come è configurato il tuo flusso.
+        fullDatabase = dataFromPA.clienti || [];
+        fornitoreTipologiaDb = dataFromPA.fornitori || [];
+        budgetDb = dataFromPA.budget || [];
+
+        log("Database configurati. Clienti caricati: " + fullDatabase.length);
+        
+        // Inizializzazione standard dei componenti dell'interfaccia
         applyRowLevelSecurity(userEmail);
         popolaFornitoriUnivoci();
         popolaBudget();
@@ -269,8 +283,10 @@
         setupLogicaEconomica();
 
       } catch (err) {
-        log("ERRORE CARICAMENTO: " + err.message);
+        log("ERRORE CRITICO CARICAMENTO DA POWER AUTOMATE: " + err.message);
+        console.error(err);
       }
+      // --- FINE MODIFICA ---
 
       function applyRowLevelSecurity(email) {
         const isMaster = MASTER_USERS.map(e => e.toLowerCase()).includes(email);
