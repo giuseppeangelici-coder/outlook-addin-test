@@ -269,7 +269,7 @@
     }
 
     function aggiungiDestinatariCondizionali(ccRecipients, region, budgetScelto, importoDaLiquidare) {
-      const codiceRegion = parseInt(region, 10).toString();
+      const codiceRegion = String(region || "").trim();
 
       const destinatariRegion = {
         "6734": ["g.paruzzolo@partesa.it", "p.lorussi@partesa.it"],
@@ -402,7 +402,6 @@
           const quantitaStima = document.getElementById("quantitaStima");
           const unitaMisura = document.getElementById("unitaMisura");
           const sezioneMerceOmaggio = document.getElementById("sezioneMerceOmaggio");
-          const sezioneEconomica = document.getElementById("sezioneEconomica");
           const codArticolo1 = document.getElementById("codArticolo1");
           const qtaArticolo1 = document.getElementById("qtaArticolo1");
 
@@ -422,29 +421,15 @@
 
           const isMerceOmaggio = normalizzaTesto(budgetSelezionato) === "MERCE OMAGGIO";
           sezioneMerceOmaggio.style.display = isMerceOmaggio ? "block" : "none";
-          sezioneEconomica.style.display = isMerceOmaggio ? "none" : "block";
           codArticolo1.required = isMerceOmaggio;
           qtaArticolo1.required = isMerceOmaggio;
 
-          if (isMerceOmaggio) {
-
-  document.getElementById("tipoImporto").value = "Fisso";
-  document.getElementById("importoReintegrato").value = "";
-  document.getElementById("importoLiquidare").value = "";
-  document.getElementById("importoExtra").value = "";
-  document.getElementById("noteIntervento").value = "";
-
-} else {
-
-  for (let i = 1; i <= 3; i++) {
-    document.getElementById(`codArticolo${i}`).value = "";
-    document.getElementById(`qtaArticolo${i}`).value = "";
-  }
-
-}
-
-sezioneMerceOmaggio.style.display = isMerceOmaggio ? "block" : "none";
-sezioneEconomica.style.display = isMerceOmaggio ? "none" : "block";
+          if (!isMerceOmaggio) {
+            for (let i = 1; i <= 3; i++) {
+              document.getElementById(`codArticolo${i}`).value = "";
+              document.getElementById(`qtaArticolo${i}`).value = "";
+            }
+          }
         });
       }
 
@@ -761,19 +746,15 @@ parseFloat(
 );
         const txtNote = document.getElementById("noteIntervento").value.trim();
 
-        if (!isMerceOmaggio) {
+        if (isNaN(valReintegrato) || valReintegrato <= 0) {
+          alert("Errore: L'Importo Reintegrato deve essere compilato e maggiore di 0.");
+          return;
+        }
 
-  if (isNaN(valReintegrato) || valReintegrato <= 0) {
-    alert("Errore: L'Importo Reintegrato deve essere compilato e maggiore di 0.");
-    return;
-  }
-
-  if (isNaN(valLiquidare) || valLiquidare < 0) {
-    alert("Errore: l'Importo da Liquidare non può essere negativo.");
-    return;
-  }
-
-}
+        if (isNaN(valLiquidare) || valLiquidare < 0) {
+          alert("Errore: l'Importo da Liquidare non può essere negativo.");
+          return;
+        }
 
         // Controllo coerenza note obbligatorie
         if (tipoValidita === "pluriennale" && txtNote === "") {
@@ -868,12 +849,10 @@ parseFloat(
 
 
 
-const ccArray = Array.from(ccRecipients);
-
 const messageFormOptions = {
-  subject: "...",
+  subject: "Richiesta RV - " + cPdv + " - " + cRag,
   htmlBody: htmlBody,
-  cc: ccArray
+cc: [...ccRecipients]
 };
 
 
@@ -889,10 +868,6 @@ messageFormOptions.attachments = [{
   name: originalSubject + " - Allegato procedura RV.eml"
 }];
         }
-alert(
-  "CC:\n" +
-  JSON.stringify(messageFormOptions.cc, null, 2)
-);
 
         Office.context.mailbox.displayNewMessageForm(messageFormOptions);
         log("Finestra email creata.");
