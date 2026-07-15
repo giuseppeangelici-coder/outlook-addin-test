@@ -71,8 +71,10 @@
 
    <!-- 3.1. TIPOLOGIA INTERVENTO -->
 <label for="inputTipologia">Tipologia Intervento (Cerca linea/prodotto)</label>
-  <input type="text" id="inputTipologia" list="listaTipologie" placeholder="Digita una tipologia o selezionala dall'elenco..." disabled>
-  <datalist id="listaTipologie"></datalist>
+  <div class="search-container">
+    <input type="text" id="inputTipologia" placeholder="Digita una tipologia o selezionala dall'elenco..." autocomplete="off" disabled>
+    <ul id="suggestionsTipologia" class="suggestions-list"></ul>
+  </div>
 
   <!-- 4. FORNITORE -->
   <label for="selectFornitore">Fornitore</label>
