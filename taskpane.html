@@ -70,7 +70,7 @@
   </select>
 
    <!-- 3.1. TIPOLOGIA INTERVENTO -->
-  <label for="inputTipologia">Tipologia Intervento (Cerca linea/prodotto)</label>
+<label for="inputTipologia">Tipologia Intervento (Cerca linea/prodotto)</label>
   <input type="text" id="inputTipologia" list="listaTipologie" placeholder="Digita una tipologia o selezionala dall'elenco..." disabled>
   <datalist id="listaTipologie"></datalist>
 
@@ -559,39 +559,116 @@
       // FILTRI CASCADING FORNITORI / TIPOLOGIE
       const selectFornitore = document.getElementById("selectFornitore");
       const inputTipologia = document.getElementById("inputTipologia");
-      const listaTipologie = document.getElementById("listaTipologie");
+      const suggestionsTipologia = document.getElementById("suggestionsTipologia");
+      let highlightedIndexTipologia = -1;
+      let fornitoreAutoSelezionato = false; // true solo se il fornitore è stato popolato da una scelta di Tipologia
 
       selectFornitore.addEventListener("change", () => {
-        inputTipologia.value = ""; 
-        aggiornaDatalistTipologie(selectFornitore.value);
+        inputTipologia.value = "";
+        fornitoreAutoSelezionato = false;
+        suggestionsTipologia.style.display = "none";
       });
 
-      inputTipologia.addEventListener("change", () => {
-        const valoreScelto = inputTipologia.value.trim();
-        const match = fornitoreTipologiaDb.find(item => String(item.TipologiaIntervento).trim() === valoreScelto);
-        if (!match) return;
+      function getTipologieFiltrate(codFornitore = "") {
+        return fornitoreTipologiaDb.filter(item =>
+          codFornitore === "" || String(item.CodFornitore).trim() === String(codFornitore).trim()
+        );
+      }
 
-        const targetCodice = String(match.CodFornitore).trim();
+      function selezionaTipologia(item) {
+        inputTipologia.value = item.TipologiaIntervento;
+        suggestionsTipologia.style.display = "none";
+        highlightedIndexTipologia = -1;
+
+        const targetCodice = String(item.CodFornitore).trim();
         const optionEsistente = [...selectFornitore.options].find(o => String(o.value).trim() === targetCodice);
         if (optionEsistente) {
           selectFornitore.value = optionEsistente.value;
+          fornitoreAutoSelezionato = true;
         }
-        aggiornaDatalistTipologie(targetCodice);
-      });
+      }
 
-      function aggiornaDatalistTipologie(codFornitore = "") {
-        listaTipologie.innerHTML = "";
-        const tipologieFiltrate = fornitoreTipologiaDb.filter(item => {
-          return codFornitore === "" || String(item.CodFornitore).trim() === String(codFornitore).trim();
-        });
-        tipologieFiltrate.forEach(item => {
-          const opt = document.createElement("option");
-          opt.value = item.TipologiaIntervento; 
-          listaTipologie.appendChild(opt);
+      function costruisciSuggerimentiTipologia(elenco) {
+        suggestionsTipologia.innerHTML = "";
+        if (elenco.length === 0) { suggestionsTipologia.style.display = "none"; return; }
+        suggestionsTipologia.style.display = "block";
+        elenco.forEach(item => {
+          const li = document.createElement("li");
+          li.textContent = item.TipologiaIntervento;
+          li.itemData = item;
+          li.addEventListener("click", () => selezionaTipologia(item));
+          suggestionsTipologia.appendChild(li);
         });
       }
-      aggiornaDatalistTipologie();
 
+      inputTipologia.addEventListener("input", () => {
+        highlightedIndexTipologia = -1;
+        const query = inputTipologia.value.toLowerCase().trim();
+
+        // Se il testo non corrisponde più alla tipologia che aveva auto-popolato
+        // il fornitore, resetta il fornitore (punto 2 della richiesta)
+        if (fornitoreAutoSelezionato) {
+          const corrisponde = fornitoreTipologiaDb.some(item =>
+            String(item.TipologiaIntervento).trim() === inputTipologia.value.trim()
+          );
+          if (!corrisponde) {
+            selectFornitore.value = "";
+            fornitoreAutoSelezionato = false;
+          }
+        }
+
+        if (query.length < 1) { suggestionsTipologia.style.display = "none"; return; }
+
+        const baseElenco = getTipologieFiltrate(selectFornitore.value);
+        const filtrate = baseElenco.filter(item =>
+          String(item.TipologiaIntervento).toLowerCase().includes(query)
+        ).slice(0, 15);
+
+        costruisciSuggerimentiTipologia(filtrate);
+      });
+
+      inputTipologia.addEventListener("focus", () => {
+        if (inputTipologia.value.trim() === "") {
+          costruisciSuggerimentiTipologia(getTipologieFiltrate(selectFornitore.value).slice(0, 15));
+        }
+      });
+
+      inputTipologia.addEventListener("keydown", (e) => {
+        const items = suggestionsTipologia.querySelectorAll("li");
+        if (items.length === 0) return;
+
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          highlightedIndexTipologia = highlightedIndexTipologia < items.length - 1 ? highlightedIndexTipologia + 1 : 0;
+          updateHighlightTipologia(items);
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault();
+          highlightedIndexTipologia = highlightedIndexTipologia > 0 ? highlightedIndexTipologia - 1 : items.length - 1;
+          updateHighlightTipologia(items);
+        } else if (e.key === "Enter") {
+          if (highlightedIndexTipologia >= 0) {
+            e.preventDefault();
+            selezionaTipologia(items[highlightedIndexTipologia].itemData);
+          }
+        } else if (e.key === "Escape") {
+          suggestionsTipologia.style.display = "none";
+          highlightedIndexTipologia = -1;
+        }
+      });
+
+      function updateHighlightTipologia(items) {
+        items.forEach(item => item.classList.remove("highlight"));
+        if (highlightedIndexTipologia >= 0) {
+          items[highlightedIndexTipologia].classList.add("highlight");
+          items[highlightedIndexTipologia].scrollIntoView({ block: "nearest" });
+        }
+      }
+
+      document.addEventListener("click", (e) => {
+        if (!e.target.closest("#inputTipologia") && !e.target.closest("#suggestionsTipologia")) {
+          suggestionsTipologia.style.display = "none";
+        }
+      });
       // AUTOCOMPLETE CLIENTE
       const searchInput = document.getElementById("searchCliente");
       const suggestionsList = document.getElementById("suggestions");
