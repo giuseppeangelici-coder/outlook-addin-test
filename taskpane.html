@@ -1,6 +1,6 @@
 <!-- 
   ADD-IN RICHIESTE RV - TASKPANE COMPONENT
-  Version: 1.7.3-Merce-Omaggio
+  Version: 1.7.8-Merce-Omaggio
   Date: 2026-07-13
   Changes: Semplificata la gestione Pluriennale secondo feedback:
            - Inizio: Mese dell'anno corrente (2026).
@@ -57,14 +57,21 @@
   </div>
 
   <!-- 2. GRUPPO -->
-  <label for="gruppoCliente">Gruppo?</label>
+  <label for="gruppoCliente">Gruppo PdC?</label>
   <select id="gruppoCliente" disabled>
     <option value="No">No</option>
     <option value="Sì">Sì</option>
   </select>
 
+  <!-- 4. FORNITORE -->
+  <label for="selectFornitore">Fornitore</label>
+  <select id="selectFornitore" disabled>
+    <option value="">-- Selezionato automaticamente da Tipologia --</option>
+  </select>
+
+
   <!-- 3. BUDGET -->
-  <label for="selectBudget">Budget</label>
+  <label for="selectBudget">Contributo</label>
   <select id="selectBudget" disabled>
     <option value="">-- Seleziona Budget --</option>
   </select>
@@ -76,13 +83,7 @@
     <ul id="suggestionsTipologia" class="suggestions-list"></ul>
   </div>
 
-  <!-- 4. FORNITORE -->
-  <label for="selectFornitore">Fornitore</label>
-  <select id="selectFornitore" disabled>
-    <option value="">-- Selezionato automaticamente da Tipologia --</option>
-  </select>
-
-  <!-- 5. PERIODO VALIDITÀ -->
+    <!-- 5. PERIODO VALIDITÀ -->
   <label for="selectValidita">Periodo Validità</label>
   <select id="selectValidita" disabled>
     <option value="">-- Seleziona Tipo Validità --</option>
@@ -225,10 +226,10 @@
         <option value="Variabile">Variabile</option>
       </select>
 
-      <label for="importoReintegrato">Importo Reintegrato (€)</label>
+      <label for="importoReintegrato">Importo contributo fornitore (€)</label>
       <input type="number" id="importoReintegrato" step="0.01" min="0.01" placeholder="Valore maggiore di 0..." disabled>
 
-      <label for="importoLiquidare">Importo da Liquidare (€)</label>
+      <label for="importoLiquidare">Importo da liquidare al cliente (€)</label>
       <input type="number" id="importoLiquidare" step="0.01" min="0" placeholder="Inserire 0 oppure un valore maggiore di 0..." disabled>
 
       <label for="importoExtra">Importo Extra Non Coperto (€)</label>
@@ -244,7 +245,7 @@
   <div id="log">Log eventi...</div>
 
   <script>
-    const APP_VERSION = "v1.7.4-Region-Merce-Omaggio";
+    const APP_VERSION = "v1.7.8-minor_fix";
     const POWER_AUTOMATE_URL = "https://default66e853deece344dd9d66ee6bdf4159.d4.environment.api.powerplatform.com/powerautomate/automations/direct/workflows/465577c70a414425a1f278e3c3f2bb43/triggers/manual/paths/invoke?api-version=1";
     const MASTER_USERS = [
   "g.angelici@partesa.it",
@@ -964,11 +965,10 @@ function formatDateIT(dataString) {
 
 
 const messageFormOptions = {
-  subject: "Richiesta RV - " + cPdv + " - " + cRag,
+  subject: `Region: ${cBu} - Richiesta RV - ${cPdv} - ${cRag}`,
   htmlBody: htmlBody,
-ccRecipients: [...ccRecipients]
+  ccRecipients: [...ccRecipients]
 };
-
 
         if (mode === "attach" && Office.context.mailbox.item && Office.context.mailbox.item.itemId) {
           const originalSubject =
