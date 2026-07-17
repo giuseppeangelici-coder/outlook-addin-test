@@ -18,6 +18,10 @@
   {
     "Budget": "VARIE",
     "ObbligoStima": "Falso"
+  },  
+  {
+    "Budget": "MERCE OMAGGIO",
+    "ObbligoStima": "Falso"
   },
   {
     "Budget": "TRIANGOLATO",
