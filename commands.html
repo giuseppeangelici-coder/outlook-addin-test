@@ -3,63 +3,13 @@
 <head>
     <meta charset="UTF-8" />
     <title>Commands</title>
-    <!-- Carica la libreria Office.js -->
-    <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+    https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
     <script>
-        // Inizializzazione dell'add-in
-        Office.onReady(function (info) {
-            if (info.host === Office.HostType.Outlook) {
-                // Monitora il cambio di selezione dei messaggi in Outlook
-                Office.context.mailbox.addHandlerAsync(
-                    Office.EventType.ItemChanged,
-                    function () {
-                        controllaSelezioneEmail();
-                    }
-                );
-                // Esegue un controllo iniziale al caricamento
-                controllaSelezioneEmail();
-            }
+        Office.onReady(function () {
+            console.log("Commands runtime ready");
         });
-
-        // Controlla se c'è un'email effettivamente selezionata
-        function controllaSelezioneEmail() {
-            var item = Office.context.mailbox.item;
-            // Se item esiste e ha un ID valido, l'email è selezionata
-            var haEmailSelezionata = item !== null && item.itemId !== undefined && item.itemId !== "";
-            aggiornaPulsanteAllega(haEmailSelezionata);
-        }
-
-        // Forza l'aggiornamento dello stato del pulsante sul Ribbon
-        function aggiornaPulsanteAllega(disponibile) {
-            // Verifica che l'API per il controllo del Ribbon sia supportata dal client Outlook in uso
-            if (Office.context.requirements.isSetSupported("RibbonAPI", "1.1")) {
-                Office.ribbon.requestUpdate({
-                    tabs: [
-                        {
-                            id: "TabDefault",
-                            groups: [
-                                {
-                                    id: "msgReadGroup",
-                                    controls: [
-                                        {
-                                            id: "btnAttach",
-                                            enabled: disponibile
-                                        }
-                                    ]
-                                }
-                            ]
-                        }
-                    ]
-                }).catch(function (error) {
-                    console.error("Errore nell'aggiornamento del Ribbon:", error);
-                });
-            } else {
-                console.log("RibbonAPI non supportata su questo client.");
-            }
-        }
     </script>
 </head>
 <body>
-    <!-- Il file dei comandi non mostra elementi visivi nell'interfaccia utente -->
 </body>
 </html>
