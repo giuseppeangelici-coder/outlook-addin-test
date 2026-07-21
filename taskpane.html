@@ -1,10 +1,11 @@
 <!-- 
   ADD-IN RICHIESTE RV - TASKPANE COMPONENT
-  Version: 1.8.1-Dynamic-Permissions-RSM-TO
+  Version: 1.8.2-Robust-JSON-Parsing
   Date: 2026-07-21
   Changes: 
-    - Impostato RSM come destinatario principale (TO) e altri condizionali in CC.
-    - Gestione dinamica incrociata dei budget abilitati per fornitore da Budget.json.
+    - Parsing avanzato di FornitoriAbilitati per gestire sia array nativi che stringhe JSON con escape.
+    - RSM in TO e altri condizionali in CC.
+    - Filtro dinamico per fornitore.
 -->
 <!DOCTYPE html>
 <html>
@@ -239,7 +240,7 @@
   <div id="log">Log eventi...</div>
 
   <script>
-    const APP_VERSION = "v1.8.1-dynamic_rsm_to";
+    const APP_VERSION = "v1.8.2-robust_json_parsing";
     const POWER_AUTOMATE_URL = "https://default66e853deece344dd9d66ee6bdf4159.d4.environment.api.powerplatform.com/powerautomate/automations/direct/workflows/465577c70a414425a1f278e3c3f2bb43/triggers/manual/paths/invoke?api-version=1";
 
     let fullDatabase = [];      
@@ -308,6 +309,39 @@
       }
     }
 
+    // --- FUNZIONE PER NORMALIZZARE ED ESTRARRE I FORNITORI ABILITATI ---
+    function estraiFornitoriAbilitati(rawInput) {
+      if (!rawInput || rawInput === "*") return "*";
+
+      // Se è già un array nativo
+      if (Array.isArray(rawInput)) {
+        return rawInput.map(String);
+      }
+
+      // Se è una stringa che contiene una struttura di tipo array es. "[\"67000...\", ...]"
+      if (typeof rawInput === "string") {
+        let strClean = rawInput.trim();
+        if (strClean === "*") return "*";
+
+        if (strClean.startsWith("[") && strClean.endsWith("]")) {
+          try {
+            const parsed = JSON.parse(strClean);
+            if (Array.isArray(parsed)) {
+              return parsed.map(String);
+            }
+          } catch (e) {
+            // Se fallisce il JSON.parse diretto, pulisce manualmente le virgolette di escape
+            return strClean
+              .replace(/[\[\]"]/g, "")
+              .split(",")
+              .map(s => s.trim())
+              .filter(Boolean);
+          }
+        }
+      }
+      return "*";
+    }
+
     // NUOVA FUNZIONE: Filtro dinamico dei budget in base al fornitore attivo
     function rinfrescaBudgetDisponibili(codFornitoreSelezionato = "") {
       const selectBudget = document.getElementById("selectBudget");
@@ -318,13 +352,13 @@
       budgetDb.forEach(item => {
         if (!item.Budget) return;
 
-        const fornitoriAmmessi = item.FornitoriAbilitati;
+        const fornitoriAmmessi = estraiFornitoriAbilitati(item.FornitoriAbilitati);
         let visibile = false;
 
-        if (!fornitoriAmmessi || fornitoriAmmessi === "*") {
+        if (fornitoriAmmessi === "*" || !codFornitoreSelezionato) {
           visibile = true;
-        } else if (Array.isArray(fornitoriAmmessi) && codFornitoreSelezionato) {
-          visibile = fornitoriAmmessi.map(String).includes(String(codFornitoreSelezionato).trim());
+        } else if (Array.isArray(fornitoriAmmessi)) {
+          visibile = fornitoriAmmessi.includes(String(codFornitoreSelezionato).trim());
         }
 
         if (visibile) {
@@ -929,10 +963,7 @@
           ""
         ).trim().toLowerCase();
         
-        // Destinatario principale (TO)
         const toRecipients = cEmailRsm ? [cEmailRsm] : [];
-
-        // Destinatari in copia (CC)
         const ccRecipients = new Set();
         const budgetScelto = budgetSelezionato;
 
@@ -990,8 +1021,8 @@
         `;
 
         const messageFormOptions = {
-          toRecipients: toRecipients,               // <--- RSM impostato in TO
-          ccRecipients: [...ccRecipients],           // <--- Tutti gli altri in CC
+          toRecipients: toRecipients,
+          ccRecipients: [...ccRecipients],
           subject: `Region: ${cBu} - Richiesta RV - ${cPdv} - ${cRag}`,
           htmlBody: htmlBody
         };
