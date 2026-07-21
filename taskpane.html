@@ -70,7 +70,7 @@
   <!-- 3. BUDGET -->
   <label for="selectBudget">Contributo</label>
   <select id="selectBudget" disabled>
-    <option value="">-- Seleziona Budget --</option>
+    <option value="">-- Indica l'origine del contributo --</option>
   </select>
 
   <!-- 3.1. TIPOLOGIA INTERVENTO -->
@@ -273,41 +273,58 @@
       return matchCodice ? matchCodice[1] : testo;
     }
 
-    function aggiungiDestinatariCondizionali(ccRecipients, region, budgetScelto, importoDaLiquidare) {
-      const codiceRegion = String(region || "").trim();
+   function aggiungiDestinatariCondizionali(ccRecipients, region, budgetScelto, importoDaLiquidare, userEmail) {
+  // 1. Mappa delle deroghe utente -> Region forzata
+  const derogheRegionUtente = {
+    "f.zanoli@partesa.it": "6716",
+    "d.sabatini@partesa.it": "6716"
+  };
 
-      const destinatariRegion = {
-        "6734": ["g.paruzzolo@partesa.it", "p.lorussi@partesa.it"],
-        "6724": ["g.paruzzolo@partesa.it", "p.lorussi@partesa.it"],
-        "6772": ["g.paruzzolo@partesa.it", "p.lorussi@partesa.it"],
-        "6716": ["g.angelici@partesa.it", "f.corinti@partesa.it"],
-        "6771": ["g.angelici@partesa.it", "f.corinti@partesa.it"],
-        "6765": ["f.difloriano@partesa.it", "p.gualtieri@partesa.it"],
-        "6770": ["f.difloriano@partesa.it", "p.gualtieri@partesa.it"],
-        "6760": ["f.difloriano@partesa.it", "p.gualtieri@partesa.it"]
-      };
+  // 2. Determina la Region da usare per i destinatari
+  const cleanUserEmail = String(userEmail || "").trim().toLowerCase();
+  let codiceRegionEffettiva = String(region || "").trim();
 
-      (destinatariRegion[codiceRegion] || []).forEach(email => ccRecipients.add(email));
+  // Se l'utente attivo è tra le eccezioni, forziamo la Region a 6716 solo per l'invio
+  if (derogheRegionUtente[cleanUserEmail]) {
+    codiceRegionEffettiva = derogheRegionUtente[cleanUserEmail];
+    log(`[DEROGA ATTIVA] Utente ${cleanUserEmail}: Region forzata da ${region} a ${codiceRegionEffettiva}`);
+  }
 
-      if (normalizzaTesto(budgetScelto) === "MERCE OMAGGIO") {
-        const destinatariMerceOmaggio = {
-          "6734": "service.adriatico@partesa.it",
-          "6716": "clienti.centro@partesa.it",
-          "6771": "clienti.centro@partesa.it",
-          "6724": "clienti.nordest@partesa.it",
-          "6772": "clienti.nordest@partesa.it",
-          "6765": "clienti.lombardia@partesa.it",
-          "6770": "clienti.lombardia@partesa.it",
-          "6760": "clienti.nordovest@partesa.it"
-        };
-        const emailService = destinatariMerceOmaggio[codiceRegion];
-        if (emailService) ccRecipients.add(emailService);
-      }
+  // 3. Tabella destinatari Portfolio / Supporto per Region
+  const destinatariRegion = {
+    "6734": ["g.paruzzolo@partesa.it", "p.lorussi@partesa.it"],
+    "6724": ["g.paruzzolo@partesa.it", "p.lorussi@partesa.it"],
+    "6772": ["g.paruzzolo@partesa.it", "p.lorussi@partesa.it"],
+    "6716": ["g.angelici@partesa.it", "f.corinti@partesa.it"],
+    "6771": ["g.angelici@partesa.it", "f.corinti@partesa.it"],
+    "6765": ["f.difloriano@partesa.it", "p.gualtieri@partesa.it"],
+    "6770": ["f.difloriano@partesa.it", "p.gualtieri@partesa.it"],
+    "6760": ["f.difloriano@partesa.it", "p.gualtieri@partesa.it"]
+  };
 
-      if (Number(importoDaLiquidare) > 0) {
-        ccRecipients.add("contratti.clienti@partesa.it");
-      }
-    }
+  // Popola i destinatari in base alla Region (eventualmente forzata)
+  (destinatariRegion[codiceRegionEffettiva] || []).forEach(email => ccRecipients.add(email));
+
+  // 4. Servizi clienti per MERCE OMAGGIO (usano anch'essi la Region formattata/forzata)
+  if (normalizzaTesto(budgetScelto) === "MERCE OMAGGIO") {
+    const destinatariMerceOmaggio = {
+      "6734": "service.adriatico@partesa.it",
+      "6716": "clienti.centro@partesa.it",
+      "6771": "clienti.centro@partesa.it",
+      "6724": "clienti.nordest@partesa.it",
+      "6772": "clienti.nordest@partesa.it",
+      "6765": "clienti.lombardia@partesa.it",
+      "6770": "clienti.lombardia@partesa.it",
+      "6760": "clienti.nordovest@partesa.it"
+    };
+    const emailService = destinatariMerceOmaggio[codiceRegionEffettiva];
+    if (emailService) ccRecipients.add(emailService);
+  }
+
+  if (Number(importoDaLiquidare) > 0) {
+    ccRecipients.add("contratti.clienti@partesa.it");
+  }
+}
 
     // --- FUNZIONE PER NORMALIZZARE ED ESTRARRE I FORNITORI ABILITATI ---
     function estraiFornitoriAbilitati(rawInput) {
@@ -967,7 +984,8 @@
         const ccRecipients = new Set();
         const budgetScelto = budgetSelezionato;
 
-        aggiungiDestinatariCondizionali(ccRecipients, cBu, budgetScelto, valLiquidare);
+        // Nuova chiamata con passaggio dell'email utente:
+aggiungiDestinatariCondizionali(ccRecipients, cBu, budgetScelto, valLiquidare, userEmail);
         log("Region rilevata: " + cBu + " | TO: " + toRecipients.join(", ") + " | CC: " + [...ccRecipients].join(", "));
 
         const cVen = selectedCustomer.venditore || selectedCustomer.Venditore || "N/D";
