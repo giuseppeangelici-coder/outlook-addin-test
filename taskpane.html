@@ -1,12 +1,10 @@
 <!-- 
   ADD-IN RICHIESTE RV - TASKPANE COMPONENT
-  Version: 1.8.0-Dynamic-Permissions
-  Date: 2026-07-19
-  Changes: Integrata gestione dinamica permessi da repository GitHub:
-           - Rimosso array hardcoded MASTER_USERS.
-           - Caricamento centralizzato emailPORTFOLIO.json per Super Users globali.
-           - Caricamento centralizzato emailRSM.json per Super Users regionali (RSM).
-           - Logica di Row Level Security a tre livelli basata su email utente.
+  Version: 1.8.1-Dynamic-Permissions-RSM-TO
+  Date: 2026-07-21
+  Changes: 
+    - Impostato RSM come destinatario principale (TO) e altri condizionali in CC.
+    - Gestione dinamica incrociata dei budget abilitati per fornitore da Budget.json.
 -->
 <!DOCTYPE html>
 <html>
@@ -68,21 +66,20 @@
     <option value="">-- Selezionato automaticamente da Tipologia --</option>
   </select>
 
-
   <!-- 3. BUDGET -->
   <label for="selectBudget">Contributo</label>
   <select id="selectBudget" disabled>
     <option value="">-- Seleziona Budget --</option>
   </select>
 
-   <!-- 3.1. TIPOLOGIA INTERVENTO -->
-<label for="inputTipologia">Tipologia Intervento (Cerca linea/prodotto)</label>
+  <!-- 3.1. TIPOLOGIA INTERVENTO -->
+  <label for="inputTipologia">Tipologia Intervento (Cerca linea/prodotto)</label>
   <div class="search-container">
     <input type="text" id="inputTipologia" placeholder="Digita una tipologia o selezionala dall'elenco..." autocomplete="off" disabled>
     <ul id="suggestionsTipologia" class="suggestions-list"></ul>
   </div>
 
-    <!-- 5. PERIODO VALIDITÀ -->
+  <!-- 5. PERIODO VALIDITÀ -->
   <label for="selectValidita">Periodo Validità</label>
   <select id="selectValidita" disabled>
     <option value="">-- Seleziona Tipo Validità --</option>
@@ -159,8 +156,6 @@
       <option value="Dicembre">Dicembre</option>
     </select>
   </div>
-
- 
 
   <!-- 7. CONDIZIONATO: QUANTITÀ E COLLI -->
   <div id="sezioneStima" style="display: none; margin-top: 12px; padding: 10px; background: #f9f9f9; border-left: 3px solid #0078d4;">
@@ -244,7 +239,7 @@
   <div id="log">Log eventi...</div>
 
   <script>
-    const APP_VERSION = "v1.8.0-dynamic_security";
+    const APP_VERSION = "v1.8.1-dynamic_rsm_to";
     const POWER_AUTOMATE_URL = "https://default66e853deece344dd9d66ee6bdf4159.d4.environment.api.powerplatform.com/powerautomate/automations/direct/workflows/465577c70a414425a1f278e3c3f2bb43/triggers/manual/paths/invoke?api-version=1";
 
     let fullDatabase = [];      
@@ -313,6 +308,42 @@
       }
     }
 
+    // NUOVA FUNZIONE: Filtro dinamico dei budget in base al fornitore attivo
+    function rinfrescaBudgetDisponibili(codFornitoreSelezionato = "") {
+      const selectBudget = document.getElementById("selectBudget");
+      const valorePrecedente = selectBudget.value;
+
+      selectBudget.innerHTML = '<option value="">-- Seleziona Budget --</option>';
+
+      budgetDb.forEach(item => {
+        if (!item.Budget) return;
+
+        const fornitoriAmmessi = item.FornitoriAbilitati;
+        let visibile = false;
+
+        if (!fornitoriAmmessi || fornitoriAmmessi === "*") {
+          visibile = true;
+        } else if (Array.isArray(fornitoriAmmessi) && codFornitoreSelezionato) {
+          visibile = fornitoriAmmessi.map(String).includes(String(codFornitoreSelezionato).trim());
+        }
+
+        if (visibile) {
+          const opt = document.createElement("option");
+          opt.value = item.Budget;
+          opt.textContent = item.Budget;
+          selectBudget.appendChild(opt);
+        }
+      });
+
+      const opzioneAncoraValida = [...selectBudget.options].some(o => o.value === valorePrecedente);
+      if (valorePrecedente && opzioneAncoraValida) {
+        selectBudget.value = valorePrecedente;
+      } else {
+        selectBudget.value = "";
+        selectBudget.dispatchEvent(new Event("change"));
+      }
+    }
+
     Office.onReady(async (info) => {
       const params = new URLSearchParams(window.location.search);
       const mode = params.get("mode") || "general";
@@ -359,7 +390,8 @@
         log("Database e file permessi caricati.");
         applyRowLevelSecurity(userEmail, portfolioDb, rsmDb);
         popolaFornitoriUnivoci();
-        popolaBudget();
+        rinfrescaBudgetDisponibili(""); // Caricamento iniziale dei budget
+        setupGestioneBudgetEvents();
         setupGestioneValidita();
         setupLogicaEconomica();
 
@@ -369,31 +401,25 @@
 
       function applyRowLevelSecurity(email, portfolioList, rsmList) {
         const cleanEmail = email.toLowerCase().trim();
-        
-        // Estrazione liste email normalizzate dai JSON esterni
         const superUsersGlobal = portfolioList.map(u => (u.email || "").toLowerCase().trim());
         const rsmUsers = rsmList.map(u => (u.email || "").toLowerCase().trim());
 
-        // LIVELLO 1: Super User Globale
         if (superUsersGlobal.includes(cleanEmail)) {
           filteredDatabase = fullDatabase;
           log("Accesso concesso come Super User Globale.");
         } 
-        // LIVELLO 2: Regional Support Manager (RSM)
         else if (rsmUsers.includes(cleanEmail)) {
           filteredDatabase = fullDatabase.filter(c => 
             (c.emailResponsabileCommerciale || c.EmailResponsabileCommerciale || "").toLowerCase().trim() === cleanEmail
           );
           log(`Accesso concesso come RSM. Righe filtrate: ${filteredDatabase.length}`);
         } 
-        // LIVELLO 3: Agente / Responsabile Vendite (RV)
         else if (fullDatabase.some(c => (c.emailResponsabileVendite || c.EmailResponsabileVendite || "").toLowerCase().trim() === cleanEmail)) {
           filteredDatabase = fullDatabase.filter(c => 
             (c.emailResponsabileVendite || c.EmailResponsabileVendite || "").toLowerCase().trim() === cleanEmail
           );
           log(`Accesso concesso come RV. Righe filtrate: ${filteredDatabase.length}`);
         } 
-        // PROTEZIONE: Utente sconosciuto/non mappato -> Tabella Vuota
         else {
           filteredDatabase = [];
           log("ATTENZIONE: Utente non autorizzato o non presente nelle anagrafiche. Accesso negato.");
@@ -424,17 +450,9 @@
         });
       }
 
-      function popolaBudget() {
+      function setupGestioneBudgetEvents() {
         const selectBudget = document.getElementById("selectBudget");
-        budgetDb.forEach(item => {
-          if (item.Budget) {
-            const opt = document.createElement("option");
-            opt.value = item.Budget;
-            opt.textContent = item.Budget;
-            selectBudget.appendChild(opt);
-          }
-        });
-
+        
         selectBudget.addEventListener("change", () => {
           const budgetSelezionato = selectBudget.value;
           const match = budgetDb.find(b => b.Budget === budgetSelezionato);
@@ -549,7 +567,7 @@
           dataInizioAnnuale.min = `${anno}-01-01`; dataInizioAnnuale.max = `${anno}-12-31`;
           dataFineAnnuale.min = `${anno}-01-01`; dataFineAnnuale.max = `${anno}-12-31`;
           if (dataInizioAnnuale.value && !dataInizioAnnuale.value.startsWith(anno)) dataInizioAnnuale.value = "";
-          if (dataFineFineAnnuale && dataFineAnnuale.value && !dataFineAnnuale.value.startsWith(anno)) dataFineAnnuale.value = "";
+          if (dataFineAnnuale && dataFineAnnuale.value && !dataFineAnnuale.value.startsWith(anno)) dataFineAnnuale.value = "";
         }
         annoAnnuale.addEventListener("change", allineaVincoliAnnoAnnuale);
       }
@@ -590,6 +608,9 @@
         inputTipologia.value = "";
         fornitoreAutoSelezionato = false;
         suggestionsTipologia.style.display = "none";
+
+        // Aggiorna la tendina dei budget in base al fornitore manualmente scelto
+        rinfrescaBudgetDisponibili(selectFornitore.value);
       });
 
       function getTipologieFiltrate(codFornitore = "") {
@@ -608,6 +629,9 @@
         if (optionEsistente) {
           selectFornitore.value = optionEsistente.value;
           fornitoreAutoSelezionato = true;
+
+          // Aggiorna la tendina dei budget in base al fornitore autoselezionato
+          rinfrescaBudgetDisponibili(selectFornitore.value);
         }
       }
 
@@ -635,6 +659,7 @@
           if (!corrisponde) {
             selectFornitore.value = "";
             fornitoreAutoSelezionato = false;
+            rinfrescaBudgetDisponibili("");
           }
         }
 
@@ -897,21 +922,22 @@
         const cRag = selectedCustomer.ragioneSociale || selectedCustomer.RagioneSociale || "";
         const cBu = estraiCodiceRegion(selectedCustomer);
 
+        // --- GESTIONE DESTINATARI (RSM in TO, gli altri in CC) ---
         const cEmailRsm = (
           selectedCustomer.emailResponsabileCommerciale ||
           selectedCustomer.EmailResponsabileCommerciale ||
           ""
         ).trim().toLowerCase();
         
+        // Destinatario principale (TO)
+        const toRecipients = cEmailRsm ? [cEmailRsm] : [];
+
+        // Destinatari in copia (CC)
         const ccRecipients = new Set();
-
-        if (cEmailRsm) {
-          ccRecipients.add(cEmailRsm);
-        }
-
         const budgetScelto = budgetSelezionato;
+
         aggiungiDestinatariCondizionali(ccRecipients, cBu, budgetScelto, valLiquidare);
-        log("Region rilevata: " + cBu + " | CC: " + [...ccRecipients].join(", "));
+        log("Region rilevata: " + cBu + " | TO: " + toRecipients.join(", ") + " | CC: " + [...ccRecipients].join(", "));
 
         const cVen = selectedCustomer.venditore || selectedCustomer.Venditore || "N/D";
        
@@ -964,9 +990,10 @@
         `;
 
         const messageFormOptions = {
+          toRecipients: toRecipients,               // <--- RSM impostato in TO
+          ccRecipients: [...ccRecipients],           // <--- Tutti gli altri in CC
           subject: `Region: ${cBu} - Richiesta RV - ${cPdv} - ${cRag}`,
-          htmlBody: htmlBody,
-          ccRecipients: [...ccRecipients]
+          htmlBody: htmlBody
         };
 
         if (mode === "attach" && Office.context.mailbox.item && Office.context.mailbox.item.itemId) {
