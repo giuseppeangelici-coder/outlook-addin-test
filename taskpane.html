@@ -38,6 +38,8 @@
   #log { margin-top: 16px; padding: 8px; background: #f3f3f3; font-size: 11px; white-space: pre-wrap; min-height: 60px; border: 1px dashed #ccc; }
   .sez-validita, .sez-economica { margin-top: 12px; padding: 10px; background: #f9f9f9; }
   .sez-validita { display: none; }
+  .flow-error-message { display: none; margin-top: 0; border-color: #d83b01; color: #a4262c; background: #fdf3f4; }
+  .user-error { color: #a4262c !important; }
   
   .box-avviso { background: #fffdf4; border: 1px solid #ffb900; padding: 8px; border-radius: 2px; margin-top: 10px; font-size: 11px; color: #7a5300; line-height: 1.4; }
 </style>
@@ -46,7 +48,7 @@
   <h2>Inserimento Richiesta RV</h2>
   <div id="modeLabel">Modalità: caricamento...</div>
   <div id="userLabel">Utente: verifica in corso...</div>
-  <div id="flowStatusMessage" class="box-avviso" style="display: none; margin-top: 0; border-color: #d83b01; color: #a4262c; background: #fdf3f4;"></div>
+  <div id="flowStatusMessage" class="box-avviso flow-error-message"></div>
 
   <!-- 1. CERCA CLIENTE -->
   <label for="searchCliente">Cerca Cliente (Codice o Ragione Sociale)</label>
@@ -249,8 +251,9 @@
     const CURRENT_YEAR = new Date().getFullYear();
     const ANNUAL_YEAR_OPTIONS = 2;
     const PLURIENNALE_YEAR_OPTIONS = 5;
+    const SPECIAL_PARTESA_CODE = "PARTESA_SPECIAL";
     const PARTESA_SUPPLIER = {
-      code: "__PARTESA__",
+      code: SPECIAL_PARTESA_CODE,
       label: "Partesa"
     };
     const BUDGET_LABELS = {
@@ -346,16 +349,16 @@
     function formatDateIT(dataString) {
       const match = String(dataString || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
       if (!match) return "";
-      const [, aa, mm, gg] = match;
-      const year = Number(aa);
-      const month = Number(mm);
-      const day = Number(gg);
+      const [, yearStr, monthStr, dayStr] = match;
+      const year = Number(yearStr);
+      const month = Number(monthStr);
+      const day = Number(dayStr);
       const isLeapYear = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
       const daysInMonth = [31, isLeapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
       if (month < 1 || month > 12) return "";
       if (day < 1 || day > daysInMonth[month - 1]) return "";
-      return `${gg}/${mm}/${aa}`;
+      return `${dayStr}/${monthStr}/${yearStr}`;
     }
 
     function estraiCodiceRegion(customer) {
@@ -479,7 +482,7 @@
     function getOfficeUserEmail() {
       const profile = Office.context.mailbox && Office.context.mailbox.userProfile;
       const email = String(profile && profile.emailAddress ? profile.emailAddress : "").trim().toLowerCase();
-      return email;
+      return email.includes("@") ? email : "";
     }
 
     function ensurePartesaOption(selectFornitore) {
@@ -501,7 +504,7 @@
       }
     }
 
-    // --- FUNZIONE PER NORMALIZZARE ED ESTRARRE I FORNITORI ABILITATI ---
+    // Normalizza il campo FornitoriAbilitati, gestendo wildcard, array nativi e array serializzati come stringa.
     function estraiFornitoriAbilitati(rawInput) {
       if (!rawInput || rawInput === "*") return "*";
 
@@ -618,7 +621,7 @@
      userEmail = getOfficeUserEmail();
      document.getElementById("userLabel").textContent = userEmail ? "Utente: " + userEmail : "⚠️ Utente: non identificato";
      if (!userEmail) {
-       document.getElementById("userLabel").style.color = "#a4262c";
+       document.getElementById("userLabel").classList.add("user-error");
        blockFlow("Impossibile identificare l’utente Office. Il flusso è stato disabilitato: ricaricare l’add-in o contattare il supporto.");
        return;
      }
@@ -629,6 +632,7 @@
      const urlPortfolio = "https://giuseppeangelici-coder.github.io/outlook-addin-test/emailPORTFOLIO.json";
      const urlRSM = "https://giuseppeangelici-coder.github.io/outlook-addin-test/emailRSM.json";
 
+     // Azzera lo stato della tipologia quando cambia il percorso guidato utente.
      function clearTipologiaSelection() {
        inputTipologia.value = "";
        selectTipologia.innerHTML = '<option value="">-- Seleziona Tipologia valida --</option>';
@@ -657,6 +661,7 @@
        }
      }
 
+     // Alterna la UX tipologia tra ricerca libera, select chiusa o campo nascosto.
      function aggiornaModalitaTipologia() {
        const budgetMode = getBudgetMode(selectBudget.value);
        const hideTipologia = isMerceOmaggioMode(budgetMode);
@@ -690,6 +695,7 @@
        }
      }
 
+     // Applica le regole speciali per MERCE OMAGGIO (Partesa) e reintegrata da fornitore.
      function applicaRegoleBudgetSpeciali() {
        const budgetMode = getBudgetMode(selectBudget.value);
 
@@ -766,6 +772,7 @@
        });
      }
 
+     // Mostra l'indicatore di nota obbligatoria solo quando richiesto dal flusso selezionato.
      function rinfrescaObbligatorietaNote() {
        const tipoValidita = selectValidita.value;
        const reqNote = document.getElementById("reqNote");
@@ -892,6 +899,7 @@
        importoLiquidare.addEventListener("input", rinfrescaCalcoloExtra);
      }
 
+     // Seleziona una tipologia valida e aggancia automaticamente il relativo fornitore.
      function selezionaTipologia(item) {
        const targetCodice = String(item.CodFornitore || "").trim();
        const targetTipologia = String(item.TipologiaIntervento || "").trim();
@@ -1288,7 +1296,7 @@
        });
 
        if (isMerceOmaggio && !recipients.serviceRecipient) {
-         alert("Errore: non è stato possibile determinare la casella clienti/service per la Region del punto vendita. Verificare che la Region del cliente sia configurata correttamente.");
+         alert("Errore: impossibile determinare la casella clienti/service per questa Region. Verificare la configurazione del cliente.");
          return;
        }
 
