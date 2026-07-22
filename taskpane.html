@@ -347,6 +347,14 @@
       const match = String(dataString || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
       if (!match) return "";
       const [, aa, mm, gg] = match;
+      const year = Number(aa);
+      const month = Number(mm);
+      const day = Number(gg);
+      const isLeapYear = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+      const daysInMonth = [31, isLeapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+      if (month < 1 || month > 12) return "";
+      if (day < 1 || day > daysInMonth[month - 1]) return "";
       return `${gg}/${mm}/${aa}`;
     }
 
@@ -608,7 +616,7 @@
      inizializzaAnniDinamici();
 
      userEmail = getOfficeUserEmail();
-     document.getElementById("userLabel").textContent = userEmail ? "Utente: " + userEmail : "Utente: non identificato";
+     document.getElementById("userLabel").textContent = userEmail ? "Utente: " + userEmail : "⚠️ Utente: non identificato";
      if (!userEmail) {
        document.getElementById("userLabel").style.color = "#a4262c";
        blockFlow("Impossibile identificare l’utente Office. Il flusso è stato disabilitato: ricaricare l’add-in o contattare il supporto.");
@@ -1121,10 +1129,10 @@
      }
 
      submitBtn.addEventListener("click", () => {
-       if (flowBlocked || !userEmail) {
-         alert("Impossibile procedere: l’utente Office non è stato identificato.");
+       if (flowBlocked) {
+         alert("Impossibile procedere: il flusso è bloccato. Verificare il messaggio mostrato nell'interfaccia e ricaricare l'add-in se necessario.");
           return;
-        }
+       }
        if (!selectedCustomer) return;
 
        if (quantitaStima.required) {
@@ -1280,7 +1288,7 @@
        });
 
        if (isMerceOmaggio && !recipients.serviceRecipient) {
-         alert("Errore: non è stato possibile determinare la casella clienti/service per la Region del punto vendita.");
+         alert("Errore: non è stato possibile determinare la casella clienti/service per la Region del punto vendita. Verificare che la Region del cliente sia configurata correttamente.");
          return;
        }
 
