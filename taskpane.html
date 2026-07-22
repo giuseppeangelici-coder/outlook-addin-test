@@ -399,6 +399,12 @@
       return budgetMode === BUDGET_MODES.merceOmaggioPartesa || budgetMode === BUDGET_MODES.merceOmaggioReintegrata;
     }
 
+    function isDerivedMerceOmaggioBudgetMatch(normalizedBudget, normalizedValue) {
+      return normalizedBudget === normalizzaTesto(BUDGET_LABELS.merceOmaggioBase) &&
+        (normalizedValue === normalizzaTesto(BUDGET_LABELS.merceOmaggioPartesa) ||
+          normalizedValue === normalizzaTesto(BUDGET_LABELS.merceOmaggioReintegrata));
+    }
+
     function buildRecipients({ region, budgetMode, importoDaLiquidare, currentUserEmail, rsmEmail }) {
       const effectiveRegion = resolveRecipientRegion(region, currentUserEmail);
 
@@ -429,15 +435,7 @@
       const normalizedValue = normalizzaTesto(budgetValue);
       return budgetDb.find(item => {
         const normalizedBudget = normalizzaTesto(item.Budget);
-        if (normalizedBudget === normalizedValue) return true;
-        if (
-          normalizedBudget === normalizzaTesto(BUDGET_LABELS.merceOmaggioBase) &&
-          (normalizedValue === normalizzaTesto(BUDGET_LABELS.merceOmaggioPartesa) ||
-            normalizedValue === normalizzaTesto(BUDGET_LABELS.merceOmaggioReintegrata))
-        ) {
-          return true;
-        }
-        return false;
+        return normalizedBudget === normalizedValue || isDerivedMerceOmaggioBudgetMatch(normalizedBudget, normalizedValue);
       }) || null;
     }
 
@@ -1192,7 +1190,7 @@
          if (!selectFornitore.value) {
            const resolvedTipologia = tryResolveTipologiaFromInput();
            if (!resolvedTipologia) {
-             alert("Errore: selezionare un Fornitore valido oppure scegliere una Tipologia valida dai suggerimenti.");
+             alert("Errore: la risoluzione automatica della tipologia non è riuscita. Selezionare un Fornitore valido oppure scegliere una Tipologia dai suggerimenti.");
              return;
            }
          }
@@ -1296,7 +1294,7 @@
        });
 
        if (isMerceOmaggio && !recipients.serviceRecipient) {
-         alert("Errore: impossibile determinare la casella clienti/service per questa Region. Verificare la configurazione del cliente.");
+         alert(`Errore: impossibile determinare la casella clienti/service per la Region ${cBu || "non valorizzata"}. Verificare la configurazione del cliente.`);
          return;
        }
 
