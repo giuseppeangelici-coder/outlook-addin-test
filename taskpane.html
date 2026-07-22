@@ -248,10 +248,12 @@
     // ==========================================================
     const DEBUG_MODE = false;
 
-    const CURRENT_YEAR = new Date().getFullYear();
     const ANNUAL_YEAR_OPTIONS = 2;
     const PLURIENNALE_YEAR_OPTIONS = 5;
     const SPECIAL_PARTESA_CODE = "PARTESA_SPECIAL";
+    const TIPOLOGIA_PLACEHOLDER_OPTION = "-- Seleziona Tipologia valida --";
+    const EMAIL_ADDRESS_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const DAYS_IN_MONTH_BASE = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
     const PARTESA_SUPPLIER = {
       code: SPECIAL_PARTESA_CODE,
       label: "Partesa"
@@ -346,6 +348,10 @@
       return String(valore || "").trim().toUpperCase();
     }
 
+    function getCurrentYear() {
+      return new Date().getFullYear();
+    }
+
     function formatDateIT(dataString) {
       const match = String(dataString || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
       if (!match) return "";
@@ -354,7 +360,10 @@
       const month = Number(monthStr);
       const day = Number(dayStr);
       const isLeapYear = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
-      const daysInMonth = [31, isLeapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+      const daysInMonth = [...DAYS_IN_MONTH_BASE];
+      if (isLeapYear) {
+        daysInMonth[1] = 29;
+      }
 
       if (month < 1 || month > 12) return "";
       if (day < 1 || day > daysInMonth[month - 1]) return "";
@@ -448,6 +457,7 @@
     }
 
     function inizializzaAnniDinamici() {
+      const currentYear = getCurrentYear();
       const annoAnnuale = document.getElementById("annoAnnuale");
       const annoFinePluri = document.getElementById("annoFinePluri");
       const labelMeseInizioPluri = document.getElementById("labelMeseInizioPluri");
@@ -456,7 +466,7 @@
 
       annoAnnuale.innerHTML = "";
       for (let yearOffset = 0; yearOffset < ANNUAL_YEAR_OPTIONS; yearOffset++) {
-        const year = CURRENT_YEAR + yearOffset;
+        const year = currentYear + yearOffset;
         const option = document.createElement("option");
         option.value = String(year);
         option.textContent = String(year);
@@ -465,22 +475,22 @@
 
       annoFinePluri.innerHTML = '<option value="">-- Seleziona Anno Scadenza --</option>';
       for (let yearOffset = 0; yearOffset < PLURIENNALE_YEAR_OPTIONS; yearOffset++) {
-        const year = CURRENT_YEAR + yearOffset;
+        const year = currentYear + yearOffset;
         const option = document.createElement("option");
         option.value = String(year);
         option.textContent = String(year);
         annoFinePluri.appendChild(option);
       }
 
-      labelMeseInizioPluri.textContent = `Mese Partenza (Anno Corrente ${CURRENT_YEAR})`;
-      labelMeseSpot.textContent = `Mese Liquidazione (Anno Corrente ${CURRENT_YEAR})`;
-      pluriNoteExample.textContent = `Es: ${CURRENT_YEAR} -> 2.000€; ${CURRENT_YEAR + 1} -> 4.000€; ${CURRENT_YEAR + 2} -> 4.000€`;
+      labelMeseInizioPluri.textContent = `Mese Partenza (Anno Corrente ${currentYear})`;
+      labelMeseSpot.textContent = `Mese Liquidazione (Anno Corrente ${currentYear})`;
+      pluriNoteExample.textContent = `Es: ${currentYear} -> 2.000€; ${currentYear + 1} -> 4.000€; ${currentYear + 2} -> 4.000€`;
     }
 
     function getOfficeUserEmail() {
       const profile = Office.context.mailbox && Office.context.mailbox.userProfile;
       const email = String(profile && profile.emailAddress ? profile.emailAddress : "").trim().toLowerCase();
-      return email.includes("@") ? email : "";
+      return EMAIL_ADDRESS_REGEX.test(email) ? email : "";
     }
 
     function ensurePartesaOption(selectFornitore) {
@@ -619,6 +629,7 @@
      userEmail = getOfficeUserEmail();
      document.getElementById("userLabel").textContent = userEmail ? "Utente: " + userEmail : "⚠️ Utente: non identificato";
      if (!userEmail) {
+       document.getElementById("userLabel").setAttribute("aria-label", "Utente Office non identificato");
        document.getElementById("userLabel").classList.add("user-error");
        blockFlow("Impossibile identificare l’utente Office. Il flusso è stato disabilitato: ricaricare l’add-in o contattare il supporto.");
        return;
@@ -633,7 +644,7 @@
      // Azzera lo stato della tipologia quando cambia il percorso guidato utente.
      function clearTipologiaSelection() {
        inputTipologia.value = "";
-       selectTipologia.innerHTML = '<option value="">-- Seleziona Tipologia valida --</option>';
+       selectTipologia.innerHTML = `<option value="">${TIPOLOGIA_PLACEHOLDER_OPTION}</option>`;
        selectTipologia.value = "";
        suggestionsTipologia.innerHTML = "";
        suggestionsTipologia.style.display = "none";
@@ -647,7 +658,7 @@
      }
 
      function popolaTipologiePerFornitore(codFornitore, tipologiaSelezionata = "") {
-       selectTipologia.innerHTML = '<option value="">-- Seleziona Tipologia valida --</option>';
+       selectTipologia.innerHTML = `<option value="">${TIPOLOGIA_PLACEHOLDER_OPTION}</option>`;
        getTipologieFiltrate(codFornitore).forEach(item => {
          const option = document.createElement("option");
          option.value = String(item.TipologiaIntervento || "").trim();
@@ -689,7 +700,7 @@
          selectTipologia.style.display = "none";
          inputTipologia.disabled = !selectedCustomer;
          selectTipologia.disabled = true;
-         selectTipologia.innerHTML = '<option value="">-- Seleziona Tipologia valida --</option>';
+         selectTipologia.innerHTML = `<option value="">${TIPOLOGIA_PLACEHOLDER_OPTION}</option>`;
        }
      }
 
@@ -1190,7 +1201,7 @@
          if (!selectFornitore.value) {
            const resolvedTipologia = tryResolveTipologiaFromInput();
            if (!resolvedTipologia) {
-             alert("Errore: la risoluzione automatica della tipologia non è riuscita. Selezionare un Fornitore valido oppure scegliere una Tipologia dai suggerimenti.");
+             alert("Errore: la tipologia non è stata risolta automaticamente. Selezionare un Fornitore valido o una Tipologia dai suggerimenti.");
              return;
            }
          }
@@ -1239,14 +1250,14 @@
            alert("Errore: selezionare il Mese di partenza e l’Anno di scadenza per il periodo pluriennale.");
            return;
          }
-         stringaDettaglioValidita = `Pluriennale - Partenza: ${mIn} ${CURRENT_YEAR} -> Scadenza Anno: ${aFi}`;
+         stringaDettaglioValidita = `Pluriennale - Partenza: ${mIn} ${getCurrentYear()} -> Scadenza Anno: ${aFi}`;
        } else if (tipoValidita === "spot") {
          const mScelto = meseSpot.value;
          if (!mScelto) {
            alert("Errore: selezionare il Mese di liquidazione per l’intervento Spot.");
            return;
          }
-         stringaDettaglioValidita = `Una tantum / Spot - Mese liquidazione: ${mScelto} ${CURRENT_YEAR}`;
+         stringaDettaglioValidita = `Una tantum / Spot - Mese liquidazione: ${mScelto} ${getCurrentYear()}`;
        }
 
        const tImporto = isMerceOmaggio ? "Non applicabile" : tipoImporto.value;
@@ -1294,7 +1305,7 @@
        });
 
        if (isMerceOmaggio && !recipients.serviceRecipient) {
-         alert(`Errore: impossibile determinare la casella clienti/service per la Region ${cBu || "non valorizzata"}. Verificare la configurazione del cliente.`);
+         alert(`Errore: impossibile determinare la casella clienti/service per la Region ${cBu || "Region non disponibile"}. Verificare la configurazione del cliente.`);
          return;
        }
 
