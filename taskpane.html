@@ -371,22 +371,37 @@
 
 
 function logToSharePoint(actionName) {
-  const siteUrl = "https://tuodominio.sharepoint.com/sites/NomeSito"; // Il tuo sito
-  const listName = "Log Add-in Outlook";
-  
-  const userEmail = Office.context.mailbox.userProfile.emailAddress;
-  const userName = Office.context.mailbox.userProfile.displayName;
+  // Configurazione esatta per la tua lista
+  const siteUrl = "https://heiway-my.sharepoint.com/personal/angelg04_heiway_net";
+  const listName = "Log Addin Outlook";
+
+  // Dati dell'utente da Outlook
+  const userEmail = Office.context.mailbox.userProfile.emailAddress || "N/D";
+  const userName = Office.context.mailbox.userProfile.displayName || "N/D";
+
+  const payload = {
+    "__metadata": { "type": `SP.Data.${listName.replace(/ /g, "_x0020_")}ListItem` },
+    "Title": actionName,
+    "Email": userEmail,
+    "Utente": userName
+  };
 
   fetch(`${siteUrl}/_api/web/lists/getbytitle('${listName}')/items`, {
     method: "POST",
-    headers: { "Accept": "application/json;odata=verbose" },
-    body: JSON.stringify({
-      "__metadata": { "type": `SP.Data.${listName.replace(/ /g, "_x0020_")}ListItem` },
-      "Title": actionName,
-      "Email": userEmail,
-      "Utente": userName
-    })
-  }).catch(err => console.error("Log error:", err));
+    headers: {
+      "Accept": "application/json;odata=verbose",
+      "Content-Type": "application/json;odata=verbose"
+    },
+    body: JSON.stringify(payload)
+  })
+  .then(response => {
+    if (!response.ok) {
+      console.warn("Log SharePoint non inviato, stato:", response.status);
+    }
+  })
+  .catch(err => {
+    console.error("Errore di tracciamento silenzioso:", err);
+  });
 }
     
     function resetForm() {
