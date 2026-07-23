@@ -1,6 +1,6 @@
 <!-- 
   ADD-IN RICHIESTE RV - TASKPANE COMPONENT
-  Version: 2.0.0-Percorso-Richiesta
+  Version: 2.0.1 - Roundtrip
   Date: 2026-07-23
   Changes: 
     - Anni dinamici e formattazione date robusta.
@@ -243,6 +243,11 @@
       <input type="text" id="importoExtra" placeholder="Calcolato automaticamente..." readonly style="background: #f3f3f3; font-weight: bold; color: #d83b01;">
     </div>
 
+    <div id="pannelloImportoFuoriBinario" style="display: none;">
+      <label id="labelImportoFuoriBinario" for="importoFuoriBinario" style="margin-top: 0;">Importo (€)</label>
+      <input type="number" id="importoFuoriBinario" step="0.01" min="0.01" placeholder="Valore maggiore di 0..." disabled>
+    </div>
+
     <label for="noteIntervento">Note <span id="reqNote" style="color: red; display: none;">(Obbligatorio)</span></label>
     <textarea id="noteIntervento" placeholder="Inserisci qui eventuali note, dettagli o la ripartizione pluriennale..." disabled></textarea>
   </div>
@@ -281,6 +286,14 @@
     const FINANCE_CC_RECIPIENTS = [
       "finance@partesa.it"
     ];
+
+    // ==========================================================
+    // ETICHETTE CAMPO IMPORTO NEI PERCORSI FUORI BINARIO (2 e 3)
+    // ==========================================================
+    const IMPORTO_FUORI_BINARIO_LABELS = {
+      [PERCORSO_RICHIESTA.fuoriBinarioVerifica]: "Importo per il quale si chiede conferma di disponibilità reintegro (€)",
+      [PERCORSO_RICHIESTA.fuoriBinarioSenzaReintegro]: "Importo da liquidare al cliente (€)"
+    };
 
     const ANNUAL_YEAR_OPTIONS = 2;
     const PLURIENNALE_YEAR_OPTIONS = 5;
@@ -668,6 +681,9 @@
      const importoReintegrato = document.getElementById("importoReintegrato");
      const importoLiquidare = document.getElementById("importoLiquidare");
      const importoExtra = document.getElementById("importoExtra");
+     const pannelloImportoFuoriBinario = document.getElementById("pannelloImportoFuoriBinario");
+     const labelImportoFuoriBinario = document.getElementById("labelImportoFuoriBinario");
+     const importoFuoriBinario = document.getElementById("importoFuoriBinario");
      const quantitaStima = document.getElementById("quantitaStima");
      const unitaMisura = document.getElementById("unitaMisura");
      const codArticolo1 = document.getElementById("codArticolo1");
@@ -981,9 +997,9 @@
      function aggiornaPercorsoGuida(percorso) {
        const guidaEl = document.getElementById("percorsoGuida");
        const testi = {
-         [PERCORSO_RICHIESTA.standard]: "✅ Flusso standard: seleziona budget, fornitore e tipologia. Email inviata all'RSM e al Portfolio/Supporto della region.",
-         [PERCORSO_RICHIESTA.fuoriBinarioVerifica]: "🔍 Fuori binario - verifica copertura: indica il fornitore e descrivi l'intervento nelle note. Email inviata all'RSM e al Portfolio per verifica.",
-         [PERCORSO_RICHIESTA.fuoriBinarioSenzaReintegro]: "⚠️ Fuori binario - investimento senza reintegro: indica il fornitore e descrivi l'intervento nelle note. Email inviata all'RSM, a Finance e al Portfolio per conoscenza."
+         [PERCORSO_RICHIESTA.standard]: "✅ Seleziona budget, fornitore e tipologia. Email inviata all'RSM e al Portfolio/Supporto della region.",
+         [PERCORSO_RICHIESTA.fuoriBinarioVerifica]: "🔍 Verifica copertura: indica il fornitore, l'importo e descrivi l'intervento nelle note. Email inviata all'RSM e al Portfolio per verifica.",
+         [PERCORSO_RICHIESTA.fuoriBinarioSenzaReintegro]: "⚠️ Investimento senza reintegro: indica il fornitore, l'importo e descrivi l'intervento nelle note. Email inviata all'RSM, a Finance e al Portfolio per conoscenza."
        };
        guidaEl.textContent = testi[percorso] || "";
        guidaEl.style.display = testi[percorso] ? "block" : "none";
@@ -1031,6 +1047,16 @@
          tipoImporto.disabled = isMerceOmaggio;
          importoReintegrato.disabled = isMerceOmaggio;
          importoLiquidare.disabled = isMerceOmaggio;
+       }
+
+       // Campo Importo: visibile solo nei percorsi fuori binario (2 e 3), con etichetta contestuale
+       pannelloImportoFuoriBinario.style.display = isFuoriBinario ? "" : "none";
+       if (isFuoriBinario) {
+         labelImportoFuoriBinario.textContent = IMPORTO_FUORI_BINARIO_LABELS[percorso] || "Importo (€)";
+         importoFuoriBinario.disabled = false;
+       } else {
+         importoFuoriBinario.disabled = true;
+         importoFuoriBinario.value = "";
        }
 
        // Etichetta fornitore: indica obbligatorietà nei percorsi fuori binario
@@ -1320,6 +1346,11 @@
            alert("Errore: il Fornitore è obbligatorio per i percorsi fuori binario.");
            return;
          }
+         const valImportoFuori = parseFloat(importoFuoriBinario.value);
+         if (!importoFuoriBinario.value || isNaN(valImportoFuori) || valImportoFuori <= 0) {
+           alert("Errore: l'Importo è obbligatorio e deve essere maggiore di 0.");
+           return;
+         }
          const txtNoteFuori = noteIntervento.value.trim();
          if (!txtNoteFuori) {
            alert("Errore: il campo Note/Descrizione è obbligatorio per i percorsi fuori binario.");
@@ -1375,7 +1406,7 @@
            return;
          }
 
-         log("Region rilevata: " + cBuF + " | TO: " + recipientsFuori.toRecipients.join(", ") + " | CC: " + recipientsFuori.ccRecipients.join(", "));
+         log("Region rilevata: " + cBuF + " | Importo: " + valImportoFuori.toFixed(2) + " € | TO: " + recipientsFuori.toRecipients.join(", ") + " | CC: " + recipientsFuori.ccRecipients.join(", "));
 
          const htmlBodyFuori = `
            <html>
@@ -1389,6 +1420,7 @@
                  <tr><td>Region</td><td>${cBuF}</td></tr>
                  <tr><td>Gruppo</td><td><b>${gruppoSceltF}</b></td></tr>
                  <tr><td>Fornitore Selezionato</td><td>${fornitoreSceltF}</td></tr>
+                 <tr><td>${labelImportoFuoriBinario.textContent}</td><td><b>${valImportoFuori.toFixed(2)} €</b></td></tr>
                  <tr><td><b>Periodo Validità</b></td><td><span style="color:#d83b01;"><b>${stringaDettaglioValiditaFuori}</b></span></td></tr>
                  <tr><td>Note / Descrizione Intervento</td><td>${txtNoteFuori}</td></tr>
                  <tr style="background-color: #f9f9f9;"><td colspan="2"></td></tr>
