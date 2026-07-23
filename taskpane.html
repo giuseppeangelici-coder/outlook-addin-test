@@ -22,7 +22,7 @@
   textarea { resize: vertical; min-height: 50px; }
   button { margin-top: 20px; background: #0078d4; color: white; border: none; cursor: pointer; padding: 8px; font-weight: bold; }
   button:disabled { background: #ccc; cursor: not-allowed; }
-  
+
   .button-group {
     display: flex;
     gap: 10px;
@@ -90,7 +90,7 @@
     <option value="fuori_binario_senza_reintegro">Richiesta approvazione investimento senza reintegro</option>
   </select>
   <div id="percorsoGuida" class="percorso-guida"></div>
-  
+
   <label for="searchCliente">Cerca Cliente (Codice o Ragione Sociale)</label>
   <div class="search-container">
     <input type="text" id="searchCliente" placeholder="Caricamento database..." autocomplete="off" disabled>
@@ -286,10 +286,12 @@
   <div id="log">Log eventi...</div>
 
   <footer class="app-footer">
+    <span>Versione: v2.0.0-percorso_richiesta</span>
     <span>Versione: v2.0.0 Roundtrip</span>
   </footer>
 
   <script>
+    const APP_VERSION = "v2.0.0-percorso_richiesta";
     const APP_VERSION = "Versione: v2.0.0 Roundtrip";
     const POWER_AUTOMATE_URL = "https://default66e853deece344dd9d66ee6bdf4159.d4.environment.api.powerplatform.com/powerautomate/automations/direct/workflows/465577c70a414425a1f278e3c3f2bb43/triggers/manual/paths/invoke?api-version=1";
 
@@ -369,41 +371,6 @@
     const flowStatusMessage = document.getElementById("flowStatusMessage");
     logElement.style.display = DEBUG_MODE ? "block" : "none";
 
-
-function logToSharePoint(actionName) {
-  // Configurazione esatta per la tua lista
-  const siteUrl = "https://heiway-my.sharepoint.com/personal/angelg04_heiway_net";
-  const listName = "Log Addin Outlook";
-
-  // Dati dell'utente da Outlook
-  const userEmail = Office.context.mailbox.userProfile.emailAddress || "N/D";
-  const userName = Office.context.mailbox.userProfile.displayName || "N/D";
-
-  const payload = {
-    "__metadata": { "type": `SP.Data.${listName.replace(/ /g, "_x0020_")}ListItem` },
-    "Title": actionName,
-    "Email": userEmail,
-    "Utente": userName
-  };
-
-  fetch(`${siteUrl}/_api/web/lists/getbytitle('${listName}')/items`, {
-    method: "POST",
-    headers: {
-      "Accept": "application/json;odata=verbose",
-      "Content-Type": "application/json;odata=verbose"
-    },
-    body: JSON.stringify(payload)
-  })
-  .then(response => {
-    if (!response.ok) {
-      console.warn("Log SharePoint non inviato, stato:", response.status);
-    }
-  })
-  .catch(err => {
-    console.error("Errore di tracciamento silenzioso:", err);
-  });
-}
-    
     function resetForm() {
       if (!confirm("Sei sicuro di voler pulire tutti i campi del modulo?")) {
         return;
@@ -418,7 +385,7 @@ function logToSharePoint(actionName) {
       document.getElementById("inputTipologia").value = "";
       document.getElementById("selectTipologia").value = "";
       document.getElementById("selectValidita").value = "";
-      
+
       // Reset campi economici
       document.getElementById("tipoImporto").value = "Fisso";
       document.getElementById("importoReintegrato").value = "";
@@ -750,7 +717,6 @@ function logToSharePoint(actionName) {
     }
 
     Office.onReady(async (info) => {
-      logToSharePoint("Apertura Add-in");
       const params = new URLSearchParams(window.location.search);
       const mode = params.get("mode") || "general";
       const submitBtn = document.getElementById("submitBtn");
@@ -1099,7 +1065,7 @@ function logToSharePoint(actionName) {
         // Budget: visibile solo nel percorso standard
         document.getElementById("labelBudget").style.display = isStandard ? "" : "none";
         selectBudget.style.display = isStandard ? "" : "none";
-        
+
         if (!isStandard) {
           selectBudget.value = "";
           sezioneMerceOmaggio.style.display = "none";
