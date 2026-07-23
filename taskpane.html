@@ -275,6 +275,8 @@
     // ==========================================================
     // FINANCE CC RECIPIENTS (percorso 3 - investimento senza reintegro)
     // Modificare qui per aggiornare i destinatari Finance in CC.
+    // Aggiungere più indirizzi separandoli con virgola, ad esempio:
+    //   const FINANCE_CC_RECIPIENTS = ["finance1@partesa.it", "finance2@partesa.it"];
     // ==========================================================
     const FINANCE_CC_RECIPIENTS = [
       "finance@partesa.it"
@@ -1359,6 +1361,8 @@
 
          const recipientsFuori = buildRecipients({
            region: cBuF,
+           // budgetMode: standard perché in percorsi fuori binario non c'è budget selezionato;
+           // il routing è determinato dal parametro percorso, non da budgetMode.
            budgetMode: BUDGET_MODES.standard,
            importoDaLiquidare: 0,
            currentUserEmail: userEmail,
