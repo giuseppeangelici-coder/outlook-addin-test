@@ -750,6 +750,7 @@ function logToSharePoint(actionName) {
     }
 
     Office.onReady(async (info) => {
+      logToSharePoint("Apertura Add-in");
       const params = new URLSearchParams(window.location.search);
       const mode = params.get("mode") || "general";
       const submitBtn = document.getElementById("submitBtn");
