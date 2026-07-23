@@ -383,6 +383,46 @@
       logElement.textContent = "Log eventi...";
     }
 
+function resetForm() {
+  // 1. Chiedi una conferma rapida per evitare azzeramenti accidentali (opzionale)
+  if (!confirm("Sei sicuro di voler pulire tutti i campi del modulo?")) {
+    return;
+  }
+
+  // 2. Resetta l'elemento form HTML standard (pulisce input, select e textarea)
+  const form = document.getElementById("mainForm"); // sostituisci con l'ID del tuo form
+  if (form) {
+    form.reset();
+  }
+
+  // 3. Ripristina lo stato iniziale delle Select/Datalist o campi custom
+  // (Esempio: azzera la selezione del PdV, Fornitore, ecc.)
+  document.getElementById("inputPdV").value = "";
+  document.getElementById("inputFornitore").value = "";
+
+  // 4. Ripristina i valori di default per radio/percorso (es. 'standard')
+  const radioStandard = document.getElementById("percorsoStandard");
+  if (radioStandard) {
+    radioStandard.checked = true;
+  }
+
+  // 5. Invoca la funzione che gestisce la visibilità UI per riallineare i campi visibili
+  // (es. nascondere i campi del fuori binario, merce omaggio, ecc.)
+  if (typeof handlePercorsoChange === "function") {
+    handlePercorsoChange();
+  }
+
+  // 6. Pulisci eventuali contenitori di errore o status message
+  const statusDiv = document.getElementById("statusMessage");
+  if (statusDiv) {
+    statusDiv.innerHTML = "";
+    statusDiv.className = "";
+  }
+
+  console.log("Form resettato con successo.");
+}
+    
+
     function log(msg) {
       if (!DEBUG_MODE) return;
       logElement.textContent += "\n" + msg;
