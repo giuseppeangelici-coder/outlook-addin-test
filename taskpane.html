@@ -1,11 +1,15 @@
 <!-- 
   ADD-IN RICHIESTE RV - TASKPANE COMPONENT
-  Version: 1.9.0-Taskpane-Only
-  Date: 2026-07-22
+  Version: 2.0.0-Percorso-Richiesta
+  Date: 2026-07-23
   Changes: 
     - Anni dinamici e formattazione date robusta.
     - Blocco del flusso se l'utente Office non è identificabile.
     - Debug mode OFF di default e regole speciali MERCE OMAGGIO / Partesa.
+    - Nuovo campo iniziale "Percorso Richiesta" (standard / fuori binario verifica / fuori binario senza reintegro).
+    - Percorso 2: budget/tipologia nascosti, note obbligatorie, routing TO:RSM CC:Portfolio.
+    - Percorso 3: budget/tipologia nascosti, note obbligatorie, routing TO:RSM CC:Finance+Portfolio.
+    - Costante FINANCE_CC_RECIPIENTS configurabile nel JS.
 -->
 <!DOCTYPE html>
 <html>
@@ -42,6 +46,8 @@
   .user-error { color: #a4262c !important; }
   
   .box-avviso { background: #fffdf4; border: 1px solid #ffb900; padding: 8px; border-radius: 2px; margin-top: 10px; font-size: 11px; color: #7a5300; line-height: 1.4; }
+  .percorso-guida { background: #f0f7ff; border: 1px solid #0078d4; padding: 8px; border-radius: 2px; margin-top: 6px; font-size: 11px; color: #004e8c; line-height: 1.4; display: none; }
+  #selectPercorso { border: 2px solid #0078d4; }
 </style>
 </head>
 <body>
@@ -50,7 +56,15 @@
   <div id="userLabel">Utente: verifica in corso...</div>
   <div id="flowStatusMessage" class="box-avviso flow-error-message"></div>
 
-  <!-- 1. CERCA CLIENTE -->
+  <!-- 0. PERCORSO RICHIESTA -->
+  <label for="selectPercorso">Percorso Richiesta <span style="color: red;">*</span></label>
+  <select id="selectPercorso" disabled>
+    <option value="">-- Seleziona Percorso --</option>
+    <option value="standard">Standard - investimento coperto da reintegro</option>
+    <option value="fuori_binario_verifica">Fuori binario - richiesta verifica disponibilità reintegro</option>
+    <option value="fuori_binario_senza_reintegro">Fuori binario - richiesta approvazione investimento senza reintegro</option>
+  </select>
+  <div id="percorsoGuida" class="percorso-guida"></div>
   <label for="searchCliente">Cerca Cliente (Codice o Ragione Sociale)</label>
   <div class="search-container">
     <input type="text" id="searchCliente" placeholder="Caricamento database..." autocomplete="off" disabled>
@@ -65,13 +79,13 @@
   </select>
 
   <!-- 4. FORNITORE -->
-  <label for="selectFornitore">Fornitore</label>
+  <label id="labelFornitore" for="selectFornitore">Fornitore</label>
   <select id="selectFornitore" disabled>
     <option value="">-- Seleziona Fornitore --</option>
   </select>
 
   <!-- 3. BUDGET -->
-  <label for="selectBudget">Contributo</label>
+  <label id="labelBudget" for="selectBudget">Contributo</label>
   <select id="selectBudget" disabled>
     <option value="">-- Indica l'origine del contributo --</option>
   </select>
@@ -238,7 +252,7 @@
   <div id="log">Log eventi...</div>
 
   <script>
-    const APP_VERSION = "v1.9.0-taskpane_only";
+    const APP_VERSION = "v2.0.0-percorso_richiesta";
     const POWER_AUTOMATE_URL = "https://default66e853deece344dd9d66ee6bdf4159.d4.environment.api.powerplatform.com/powerautomate/automations/direct/workflows/465577c70a414425a1f278e3c3f2bb43/triggers/manual/paths/invoke?api-version=1";
 
     // ==========================================================
@@ -247,6 +261,24 @@
     // Con false il pannello log resta nascosto e non mostra output.
     // ==========================================================
     const DEBUG_MODE = false;
+
+    // ==========================================================
+    // PERCORSO RICHIESTA
+    // Valori possibili per la select #selectPercorso.
+    // ==========================================================
+    const PERCORSO_RICHIESTA = {
+      standard: "standard",
+      fuoriBinarioVerifica: "fuori_binario_verifica",
+      fuoriBinarioSenzaReintegro: "fuori_binario_senza_reintegro"
+    };
+
+    // ==========================================================
+    // FINANCE CC RECIPIENTS (percorso 3 - investimento senza reintegro)
+    // Modificare qui per aggiornare i destinatari Finance in CC.
+    // ==========================================================
+    const FINANCE_CC_RECIPIENTS = [
+      "finance@partesa.it"
+    ];
 
     const ANNUAL_YEAR_OPTIONS = 2;
     const PLURIENNALE_YEAR_OPTIONS = 5;
@@ -414,7 +446,7 @@
           normalizedValue === normalizzaTesto(BUDGET_LABELS.merceOmaggioReintegrata));
     }
 
-    function buildRecipients({ region, budgetMode, importoDaLiquidare, currentUserEmail, rsmEmail }) {
+    function buildRecipients({ region, budgetMode, importoDaLiquidare, currentUserEmail, rsmEmail, percorso }) {
       const effectiveRegion = resolveRecipientRegion(region, currentUserEmail);
 
       if (isMerceOmaggioMode(budgetMode)) {
@@ -427,7 +459,31 @@
         };
       }
 
-      const ccRecipients = new Set(PORTFOLIO_CC_RECIPIENTS[effectiveRegion] || []);
+      const portfolioCc = PORTFOLIO_CC_RECIPIENTS[effectiveRegion] || [];
+
+      // Percorso 2: TO RSM, CC Portfolio/supporto region
+      if (percorso === PERCORSO_RICHIESTA.fuoriBinarioVerifica) {
+        return {
+          toRecipients: rsmEmail ? [rsmEmail] : [],
+          ccRecipients: [...portfolioCc],
+          effectiveRegion,
+          serviceRecipient: ""
+        };
+      }
+
+      // Percorso 3: TO RSM, CC Finance + Portfolio/supporto region
+      if (percorso === PERCORSO_RICHIESTA.fuoriBinarioSenzaReintegro) {
+        const ccSet = new Set([...FINANCE_CC_RECIPIENTS, ...portfolioCc]);
+        return {
+          toRecipients: rsmEmail ? [rsmEmail] : [],
+          ccRecipients: [...ccSet],
+          effectiveRegion,
+          serviceRecipient: ""
+        };
+      }
+
+      // Percorso 1 (standard)
+      const ccRecipients = new Set(portfolioCc);
       if (Number(importoDaLiquidare) > 0) {
         ccRecipients.add("contratti.clienti@partesa.it");
       }
@@ -672,6 +728,17 @@
 
      // Alterna la UX tipologia tra ricerca libera, select chiusa o campo nascosto.
      function aggiornaModalitaTipologia() {
+       // Nei percorsi fuori binario la tipologia è sempre nascosta
+       const percorsoAttuale = document.getElementById("selectPercorso").value;
+       if (percorsoAttuale === PERCORSO_RICHIESTA.fuoriBinarioVerifica || percorsoAttuale === PERCORSO_RICHIESTA.fuoriBinarioSenzaReintegro) {
+         tipologiaLabel.style.display = "none";
+         tipologiaSearchContainer.style.display = "none";
+         selectTipologia.style.display = "none";
+         inputTipologia.disabled = true;
+         selectTipologia.disabled = true;
+         return;
+       }
+
        const budgetMode = getBudgetMode(selectBudget.value);
        const hideTipologia = isMerceOmaggioMode(budgetMode);
        const hasSupplier = !!selectFornitore.value;
@@ -908,6 +975,85 @@
        importoLiquidare.addEventListener("input", rinfrescaCalcoloExtra);
      }
 
+     // Aggiorna il messaggio guida sotto il selettore percorso.
+     function aggiornaPercorsoGuida(percorso) {
+       const guidaEl = document.getElementById("percorsoGuida");
+       const testi = {
+         [PERCORSO_RICHIESTA.standard]: "✅ Flusso standard: seleziona budget, fornitore e tipologia. Email inviata all'RSM e al Portfolio/Supporto della region.",
+         [PERCORSO_RICHIESTA.fuoriBinarioVerifica]: "🔍 Fuori binario - verifica copertura: indica il fornitore e descrivi l'intervento nelle note. Email inviata all'RSM e al Portfolio per verifica.",
+         [PERCORSO_RICHIESTA.fuoriBinarioSenzaReintegro]: "⚠️ Fuori binario - investimento senza reintegro: indica il fornitore e descrivi l'intervento nelle note. Email inviata all'RSM, a Finance e al Portfolio per conoscenza."
+       };
+       guidaEl.textContent = testi[percorso] || "";
+       guidaEl.style.display = testi[percorso] ? "block" : "none";
+     }
+
+     // Aggiorna visibilità e obbligatorietà dei campi in base al percorso selezionato.
+     function aggiornaVisibilitaPercorso() {
+       const percorso = document.getElementById("selectPercorso").value;
+       const isStandard = !percorso || percorso === PERCORSO_RICHIESTA.standard;
+       const isFuoriBinario = percorso === PERCORSO_RICHIESTA.fuoriBinarioVerifica || percorso === PERCORSO_RICHIESTA.fuoriBinarioSenzaReintegro;
+       const hasCustomer = !!selectedCustomer;
+
+       aggiornaPercorsoGuida(percorso);
+
+       // Budget: visibile solo nel percorso standard
+       document.getElementById("labelBudget").style.display = isStandard ? "" : "none";
+       selectBudget.style.display = isStandard ? "" : "none";
+       if (!isStandard) {
+         // Resetta stato dipendente dal budget
+         selectBudget.value = "";
+         sezioneMerceOmaggio.style.display = "none";
+         codArticolo1.required = false;
+         qtaArticolo1.required = false;
+         sezioneStima.style.display = "none";
+         quantitaStima.required = false;
+         unitaMisura.required = false;
+         // Sblocca fornitore se era bloccato su Partesa
+         selectFornitore.disabled = !hasCustomer;
+         removePartesaOption(selectFornitore);
+       }
+
+       // Tipologia: visibile solo nel percorso standard (gestita da aggiornaModalitaTipologia)
+       aggiornaModalitaTipologia();
+
+       // Pannello importi economici: visibile solo nel percorso standard
+       pannelloImporti.style.display = isStandard ? "" : "none";
+       if (!isStandard) {
+         tipoImporto.disabled = true;
+         importoReintegrato.disabled = true;
+         importoLiquidare.disabled = true;
+         importoExtra.value = "";
+       } else if (hasCustomer) {
+         const currentBudgetMode = getBudgetMode(selectBudget.value);
+         const isMerceOmaggio = isMerceOmaggioMode(currentBudgetMode);
+         tipoImporto.disabled = isMerceOmaggio;
+         importoReintegrato.disabled = isMerceOmaggio;
+         importoLiquidare.disabled = isMerceOmaggio;
+       }
+
+       // Etichetta fornitore: indica obbligatorietà nei percorsi fuori binario
+       document.getElementById("labelFornitore").textContent = isFuoriBinario ? "Fornitore (obbligatorio)" : "Fornitore";
+
+       // Note: obbligatorie nei percorsi fuori binario, con placeholder contestuale
+       const reqNote = document.getElementById("reqNote");
+       if (isFuoriBinario) {
+         reqNote.style.display = "inline";
+         noteIntervento.placeholder = percorso === PERCORSO_RICHIESTA.fuoriBinarioVerifica
+           ? "Descrivi l'intervento richiesto e specifica il motivo per cui chiedi la verifica della disponibilità di copertura..."
+           : "Descrivi l'intervento richiesto e la motivazione per cui stai richiedendo l'approvazione senza reintegro (investimento a riduzione margine)...";
+       } else {
+         rinfrescaObbligatorietaNote();
+         noteIntervento.placeholder = "Inserisci qui eventuali note, dettagli o la ripartizione pluriennale...";
+       }
+     }
+
+     function setupGestionePercorso() {
+       const selectPercorso = document.getElementById("selectPercorso");
+       selectPercorso.addEventListener("change", () => {
+         aggiornaVisibilitaPercorso();
+       });
+     }
+
      // Seleziona una tipologia valida e aggancia automaticamente il relativo fornitore.
      function selezionaTipologia(item) {
        const targetCodice = String(item.CodFornitore || "").trim();
@@ -1107,7 +1253,8 @@
        importoReintegrato.disabled = isMerceOmaggio;
        importoLiquidare.disabled = isMerceOmaggio;
 
-       aggiornaModalitaTipologia();
+       // Applica le regole di visibilità basate sul percorso selezionato
+       aggiornaVisibilitaPercorso();
        submitBtn.disabled = false;
        log("Cliente " + (customer.codPdV || customer.CodPdV) + " agganciato.");
      }
@@ -1140,6 +1287,9 @@
        setupGestioneBudgetEvents();
        setupGestioneValidita();
        setupLogicaEconomica();
+       setupGestionePercorso();
+       // Abilita il selettore percorso dopo il caricamento dei dati
+       document.getElementById("selectPercorso").disabled = false;
        aggiornaModalitaTipologia();
      } catch (err) {
        blockFlow("Errore caricamento dati: " + err.message);
@@ -1152,10 +1302,127 @@
        }
        if (!selectedCustomer) return;
 
+       // Verifica percorso richiesta selezionato
+       const percorsoSelezionato = document.getElementById("selectPercorso").value;
+       if (!percorsoSelezionato) {
+         alert("Errore: selezionare il Percorso Richiesta prima di procedere.");
+         return;
+       }
+       const isPercorsoFuoriBinario = percorsoSelezionato === PERCORSO_RICHIESTA.fuoriBinarioVerifica || percorsoSelezionato === PERCORSO_RICHIESTA.fuoriBinarioSenzaReintegro;
+
+       // ─────────────────────────────────────────────────────────
+       // PERCORSO FUORI BINARIO (2 e 3) — validazione e invio
+       // ─────────────────────────────────────────────────────────
+       if (isPercorsoFuoriBinario) {
+         if (!selectFornitore.value) {
+           alert("Errore: il Fornitore è obbligatorio per i percorsi fuori binario.");
+           return;
+         }
+         const txtNoteFuori = noteIntervento.value.trim();
+         if (!txtNoteFuori) {
+           alert("Errore: il campo Note/Descrizione è obbligatorio per i percorsi fuori binario.");
+           return;
+         }
+         const tipoValiditaFuori = selectValidita.value;
+         if (!tipoValiditaFuori) {
+           alert("Errore: selezionare un Periodo Validità dal menu a tendina.");
+           return;
+         }
+         let stringaDettaglioValiditaFuori = "";
+         if (tipoValiditaFuori === "annuale") {
+           const dIn = dataInizioAnnuale.value;
+           const dFi = dataFineAnnuale.value;
+           if (!dIn || !dFi) { alert("Errore: inserire Data Inizio e Data Fine per il periodo annuale."); return; }
+           if (dIn > dFi) { alert("Errore: la Data Fine non può essere precedente alla Data Inizio."); return; }
+           stringaDettaglioValiditaFuori = `Annuale (Anno ref: ${annoAnnuale.value}) - Dal ${formatDateIT(dIn)} al ${formatDateIT(dFi)}`;
+         } else if (tipoValiditaFuori === "pluriennale") {
+           const mIn = meseInizioPluri.value;
+           const aFi = annoFinePluri.value;
+           if (!mIn || !aFi) { alert("Errore: selezionare il Mese di partenza e l'Anno di scadenza per il periodo pluriennale."); return; }
+           stringaDettaglioValiditaFuori = `Pluriennale - Partenza: ${mIn} ${getCurrentYear()} -> Scadenza Anno: ${aFi}`;
+         } else if (tipoValiditaFuori === "spot") {
+           const mScelto = meseSpot.value;
+           if (!mScelto) { alert("Errore: selezionare il Mese di liquidazione per l'intervento Spot."); return; }
+           stringaDettaglioValiditaFuori = `Una tantum / Spot - Mese liquidazione: ${mScelto} ${getCurrentYear()}`;
+         }
+
+         const cPdvF = selectedCustomer.codPdV || selectedCustomer.CodPdV || "";
+         const cRagF = selectedCustomer.ragioneSociale || selectedCustomer.RagioneSociale || "";
+         const cBuF = estraiCodiceRegion(selectedCustomer);
+         const cEmailRsmF = (selectedCustomer.emailResponsabileCommerciale || selectedCustomer.EmailResponsabileCommerciale || "").trim().toLowerCase();
+         const cVenF = selectedCustomer.venditore || selectedCustomer.Venditore || "N/D";
+         const gruppoSceltF = gruppoCliente.value;
+         const fornitoreOptF = selectFornitore.options[selectFornitore.selectedIndex];
+         const fornitoreSceltF = fornitoreOptF ? fornitoreOptF.textContent : "Non specificato";
+         const selectPercorsoEl = document.getElementById("selectPercorso");
+         const percorsoLabelF = selectPercorsoEl.options[selectPercorsoEl.selectedIndex].text;
+
+         const recipientsFuori = buildRecipients({
+           region: cBuF,
+           budgetMode: BUDGET_MODES.standard,
+           importoDaLiquidare: 0,
+           currentUserEmail: userEmail,
+           rsmEmail: cEmailRsmF,
+           percorso: percorsoSelezionato
+         });
+
+         if (!recipientsFuori.toRecipients.length) {
+           alert(`Errore: impossibile determinare il destinatario RSM per la Region ${cBuF || "non disponibile"}. Verificare l'anagrafica del cliente.`);
+           return;
+         }
+
+         log("Region rilevata: " + cBuF + " | TO: " + recipientsFuori.toRecipients.join(", ") + " | CC: " + recipientsFuori.ccRecipients.join(", "));
+
+         const htmlBodyFuori = `
+           <html>
+             <body style="font-family: Calibri, sans-serif; font-size: 12px;">
+               <p>Richiesta di attivazione procedura RV <strong>[${percorsoLabelF}]</strong> per il seguente punto vendita:</p>
+               <table border="1" cellpadding="6" style="border-collapse: collapse; font-family: Calibri, sans-serif; font-size: 12px;">
+                 <tr style="background-color: #f2f2f2;"><td><b>Campo</b></td><td><b>Valore</b></td></tr>
+                 <tr style="background-color: #fff3e0;"><td>Percorso Richiesta</td><td><b>${percorsoLabelF}</b></td></tr>
+                 <tr><td>Codice PdV</td><td>${cPdvF}</td></tr>
+                 <tr><td>Ragione Sociale</td><td>${cRagF}</td></tr>
+                 <tr><td>Region</td><td>${cBuF}</td></tr>
+                 <tr><td>Gruppo</td><td><b>${gruppoSceltF}</b></td></tr>
+                 <tr><td>Fornitore Selezionato</td><td>${fornitoreSceltF}</td></tr>
+                 <tr><td><b>Periodo Validità</b></td><td><span style="color:#d83b01;"><b>${stringaDettaglioValiditaFuori}</b></span></td></tr>
+                 <tr><td>Note / Descrizione Intervento</td><td>${txtNoteFuori}</td></tr>
+                 <tr style="background-color: #f9f9f9;"><td colspan="2"></td></tr>
+                 <tr><td>Venditore</td><td>${cVenF}</td></tr>
+               </table>
+               <p style="font-size: 11px; color: #666;">Generato tramite Outlook Add-in ${APP_VERSION}</p>
+             </body>
+           </html>
+         `;
+
+         const messageFormOptionsFuori = {
+           toRecipients: recipientsFuori.toRecipients,
+           ccRecipients: recipientsFuori.ccRecipients,
+           subject: `Region: ${cBuF} - Richiesta RV [Fuori Binario] - ${cPdvF} - ${cRagF}`,
+           htmlBody: htmlBodyFuori
+         };
+
+         if (mode === "attach" && Office.context.mailbox.item && Office.context.mailbox.item.itemId) {
+           const originalSubjectF = (Office.context.mailbox.item.subject || "Messaggio originale").replace(/[\\/:*?"<>|]/g, "-");
+           messageFormOptionsFuori.attachments = [{
+             type: "item",
+             itemId: Office.context.mailbox.item.itemId,
+             name: originalSubjectF + " - Allegato procedura RV.eml"
+           }];
+         }
+
+         Office.context.mailbox.displayNewMessageForm(messageFormOptionsFuori);
+         log("Finestra email creata (percorso fuori binario).");
+         return;
+       }
+
+       // ─────────────────────────────────────────────────────────
+       // PERCORSO STANDARD (1) — validazione e invio
+       // ─────────────────────────────────────────────────────────
        if (quantitaStima.required) {
          const qVal = parseInt(quantitaStima.value, 10);
          if (isNaN(qVal) || qVal <= 0 || !unitaMisura.value) {
-           alert("Errore: compilare Quantità Stima con un numero intero maggiore di 0 e selezionare l’Unità di Misura.");
+           alert("Errore: compilare Quantità Stima con un numero intero maggiore di 0 e selezionare l'Unità di Misura.");
            return;
          }
        }
@@ -1301,7 +1568,8 @@
          budgetMode,
          importoDaLiquidare: valLiquidare,
          currentUserEmail: userEmail,
-         rsmEmail: cEmailRsm
+         rsmEmail: cEmailRsm,
+         percorso: percorsoSelezionato
        });
 
        if (isMerceOmaggio && !recipients.serviceRecipient) {
