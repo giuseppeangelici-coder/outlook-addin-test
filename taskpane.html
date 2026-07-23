@@ -369,6 +369,26 @@
     const flowStatusMessage = document.getElementById("flowStatusMessage");
     logElement.style.display = DEBUG_MODE ? "block" : "none";
 
+
+function logToSharePoint(actionName) {
+  const siteUrl = "https://tuodominio.sharepoint.com/sites/NomeSito"; // Il tuo sito
+  const listName = "Log Add-in Outlook";
+  
+  const userEmail = Office.context.mailbox.userProfile.emailAddress;
+  const userName = Office.context.mailbox.userProfile.displayName;
+
+  fetch(`${siteUrl}/_api/web/lists/getbytitle('${listName}')/items`, {
+    method: "POST",
+    headers: { "Accept": "application/json;odata=verbose" },
+    body: JSON.stringify({
+      "__metadata": { "type": `SP.Data.${listName.replace(/ /g, "_x0020_")}ListItem` },
+      "Title": actionName,
+      "Email": userEmail,
+      "Utente": userName
+    })
+  }).catch(err => console.error("Log error:", err));
+}
+    
     function resetForm() {
       if (!confirm("Sei sicuro di voler pulire tutti i campi del modulo?")) {
         return;
