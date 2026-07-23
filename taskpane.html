@@ -1343,7 +1343,7 @@
        // ─────────────────────────────────────────────────────────
        if (isPercorsoFuoriBinario) {
          if (!selectFornitore.value) {
-           alert("Errore: il Fornitore è obbligatorio per i percorsi fuori binario.");
+           alert("Errore: il Fornitore è obbligatorio.");
            return;
          }
          const valImportoFuori = parseFloat(importoFuoriBinario.value);
@@ -1434,7 +1434,7 @@
          const messageFormOptionsFuori = {
            toRecipients: recipientsFuori.toRecipients,
            ccRecipients: recipientsFuori.ccRecipients,
-           subject: `Region: ${cBuF} - Richiesta RV [Fuori Binario] - ${cPdvF} - ${cRagF}`,
+           subject: `Region: ${cBuF} - Richiesta RV [verifica disponibilità reintegro] - ${cPdvF} - ${cRagF}`,
            htmlBody: htmlBodyFuori
          };
 
