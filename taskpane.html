@@ -27,6 +27,29 @@
   textarea { resize: vertical; min-height: 50px; }
   button { margin-top: 20px; background: #0078d4; color: white; border: none; cursor: pointer; padding: 8px; font-weight: bold; }
   button:disabled { background: #ccc; cursor: not-allowed; }
+  .button-group {
+  display: flex;
+  gap: 10px; /* Spazio tra i due pulsanti */
+  margin-top: 15px;
+}
+
+.button-group button {
+  flex: 1; /* Rende i pulsanti di pari larghezza */
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+/* Stile secondario per il tasto reset */
+.btn-secondary {
+  background-color: #f3f3f3;
+  color: #333;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.btn-secondary:hover {
+  background-color: #e0e0e0;
+}
 
   .suggestions-list li.highlight { background-color: #0078d4; color: white; }
   .search-container { position: relative; }
@@ -252,7 +275,10 @@
     <textarea id="noteIntervento" placeholder="Inserisci qui eventuali note, dettagli o la ripartizione pluriennale..." disabled></textarea>
   </div>
 
+<div class="button-group">
   <button id="submitBtn" disabled>Genera Richiesta RV</button>
+  <button type="button" id="btnReset" class="btn-secondary" onclick="resetForm()">Pulisci Form</button>
+</div>
 
   <div id="log">Log eventi...</div>
 
