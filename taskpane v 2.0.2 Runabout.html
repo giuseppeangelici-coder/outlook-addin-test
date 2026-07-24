@@ -1,0 +1,1898 @@
+<!-- 
+  ADD-IN RICHIESTE RV - TASKPANE COMPONENT
+  Version: 2.0.1 - Roundtrip
+  Date: 2026-07-23
+  Changes: 
+    - Intestazione pulita (rimosse info modalita/utente/host in alto).
+    - Versione spostata nel footer in calce al modulo.
+    - Corretto bug visibilita e azzeramento campi importo nei percorsi fuori binario.
+    - Funzione resetForm() riallineata sugli ID corretti del DOM.
+-->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<title>Richiesta RV - Data Entry</title>
+<script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+<style>
+  body { font-family: 'Segoe UI', sans-serif; padding: 16px; font-size: 12px; color: #333; }
+  h2 { font-size: 15px; margin-bottom: 12px; color: #0078d4; }
+  label { display: block; margin-top: 12px; font-weight: 600; }
+  input, select, button, textarea { width: 100%; padding: 6px; margin-top: 4px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 2px; font-family: inherit; font-size: 12px; }
+  textarea { resize: vertical; min-height: 50px; }
+  button { margin-top: 20px; background: #0078d4; color: white; border: none; cursor: pointer; padding: 8px; font-weight: bold; }
+  button:disabled { background: #ccc; cursor: not-allowed; }
+
+  .button-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+  }
+
+  .button-group button {
+    flex: 1;
+    padding: 8px 12px;
+    cursor: pointer;
+  }
+
+  .btn-secondary {
+    background-color: #f3f3f3;
+    color: #333;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+  }
+
+  .btn-secondary:hover {
+    background-color: #e0e0e0;
+  }
+
+  .suggestions-list li.highlight { background-color: #0078d4; color: white; }
+  .search-container { position: relative; }
+  .suggestions-list { 
+    position: absolute; top: 100%; left: 0; right: 0; 
+    background: white; border: 1px solid #ccc; border-top: none; 
+    max-height: 200px; overflow-y: auto; z-index: 1000; display: none; 
+    margin: 0; padding: 0; list-style: none;
+  }
+  .suggestions-list li { padding: 8px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 12px; }
+  .suggestions-list li:hover { background: #f3f3f3; }
+
+  #log { margin-top: 16px; padding: 8px; background: #f3f3f3; font-size: 11px; white-space: pre-wrap; min-height: 60px; border: 1px dashed #ccc; }
+  .sez-validita, .sez-economica { margin-top: 12px; padding: 10px; background: #f9f9f9; }
+  .sez-validita { display: none; }
+  .flow-error-message { display: none; margin-top: 0; border-color: #d83b01; color: #a4262c; background: #fdf3f4; }
+  .user-error { color: #a4262c !important; }
+
+  .box-avviso { background: #fffdf4; border: 1px solid #ffb900; padding: 8px; border-radius: 2px; margin-top: 10px; font-size: 11px; color: #7a5300; line-height: 1.4; }
+  .percorso-guida { background: #f0f7ff; border: 1px solid #0078d4; padding: 8px; border-radius: 2px; margin-top: 6px; font-size: 11px; color: #004e8c; line-height: 1.4; display: none; }
+  #selectPercorso { border: 2px solid #0078d4; }
+
+  .app-footer {
+    margin-top: 25px;
+    padding-top: 10px;
+    border-top: 1px solid #e0e0e0;
+    text-align: center;
+    font-size: 10px;
+    color: #888888;
+  }
+</style>
+</head>
+<body>
+  <h2>Inserimento Richiesta RV</h2>
+  <div id="flowStatusMessage" class="box-avviso flow-error-message"></div>
+
+  <!-- 0. PERCORSO RICHIESTA -->
+  <label for="selectPercorso">Tipo di Richiesta <span style="color: red;">*</span></label>
+  <select id="selectPercorso" disabled>
+    <option value="">-- Scegli cosa vuoi fare --</option>
+    <option value="fornitore">Investimento coperto da fornitore</option>
+    <option value="partesa">Investimento a carico Partesa</option>
+    <option value="omaggio">Merce omaggio</option>
+  </select>
+  <div id="percorsoGuida" class="percorso-guida"></div>
+
+  <!-- 1. CLIENTE -->
+  <label for="searchCliente">Cerca Cliente (Codice o Ragione Sociale) <span style="color: red;">*</span></label>
+  <div class="search-container">
+    <input type="text" id="searchCliente" placeholder="Caricamento database..." autocomplete="off" disabled>
+    <ul id="suggestions" class="suggestions-list"></ul>
+  </div>
+
+  <!-- 2. GRUPPO PDC (Mostrato solo se pertinente) -->
+  <div id="containerGruppo">
+    <label for="gruppoCliente">Gruppo PdC?</label>
+    <select id="gruppoCliente" disabled>
+      <option value="No">No</option>
+      <option value="Sì">Sì</option>
+    </select>
+  </div>
+
+  <!-- 4. FORNITORE (Ora in modalità Ricerca Intelligente) -->
+  <div id="containerFornitore">
+    <label id="labelFornitore" for="inputFornitore">Fornitore</label>
+    <div id="fornitoreSearchContainer" class="search-container">
+      <input type="text" id="inputFornitore" placeholder="Cerca fornitore per Codice o Ragione Sociale..." autocomplete="off" disabled>
+      <ul id="suggestionsFornitore" class="suggestions-list"></ul>
+    </div>
+    <!-- Select nascosto di backup per mantenere la compatibilità col valore selezionato -->
+    <select id="selectFornitore" disabled style="display: none;">
+      <option value="">-- Seleziona Fornitore --</option>
+    </select>
+  </div>
+
+  <!-- 3. BUDGET -->
+  <label id="labelBudget" for="selectBudget">Contributo</label>
+  <select id="selectBudget" disabled>
+    <option value="">-- Indica l'origine del contributo --</option>
+  </select>
+
+  <!-- 3.1. TIPOLOGIA INTERVENTO -->
+  <label id="labelTipologia" for="inputTipologia">Tipologia Intervento (Cerca linea/prodotto)</label>
+  <div id="tipologiaSearchContainer" class="search-container">
+    <input type="text" id="inputTipologia" placeholder="Digita una tipologia o selezionala dall'elenco..." autocomplete="off" disabled>
+    <ul id="suggestionsTipologia" class="suggestions-list"></ul>
+  </div>
+  <select id="selectTipologia" disabled style="display: none;">
+    <option value="">-- Seleziona Tipologia valida --</option>
+  </select>
+
+  <!-- 5. PERIODO VALIDITÀ -->
+  <label for="selectValidita">Periodo Validità</label>
+  <select id="selectValidita" disabled>
+    <option value="">-- Seleziona Tipo Validità --</option>
+    <option value="annuale">1. Intervento Annuale</option>
+    <option value="pluriennale">2. Pluriennale (Ripartizione Manuale)</option>
+    <option value="spot">3. Una tantum / Spot</option>
+  </select>
+
+  <!-- SUB-SEZIONE 1: ANNUALE -->
+  <div id="sezAnnuale" class="sez-validita" style="border-left: 3px solid #ffb900;">
+    <label id="labelAnnoAnnuale" for="annoAnnuale" style="margin-top: 0;">Seleziona Anno Riferimento</label>
+    <select id="annoAnnuale"></select>
+    <label for="dataInizioAnnuale">Data Inizio</label>
+    <input type="date" id="dataInizioAnnuale">
+    <label for="dataFineAnnuale">Data Fine</label>
+    <input type="date" id="dataFineAnnuale">
+  </div>
+
+  <!-- SUB-SEZIONE 2: PLURIENNALE -->
+  <div id="sezPluriennale" class="sez-validita" style="border-left: 3px solid #d83b01;">
+    <label id="labelMeseInizioPluri" for="meseInizioPluri" style="margin-top: 0;">Mese Partenza</label>
+    <select id="meseInizioPluri">
+      <option value="">-- Seleziona Mese Partenza --</option>
+      <option value="Gennaio">Gennaio</option>
+      <option value="Febbraio">Febbraio</option>
+      <option value="Marzo">Marzo</option>
+      <option value="Aprile">Aprile</option>
+      <option value="Maggio">Maggio</option>
+      <option value="Giugno">Giugno</option>
+      <option value="Luglio">Luglio</option>
+      <option value="Agosto">Agosto</option>
+      <option value="Settembre">Settembre</option>
+      <option value="Ottobre">Ottobre</option>
+      <option value="Novembre">Novembre</option>
+      <option value="Dicembre">Dicembre</option>
+    </select>
+
+    <label id="labelAnnoFinePluri" for="annoFinePluri">Anno Fine Validità</label>
+    <select id="annoFinePluri">
+      <option value="">-- Seleziona Anno Scadenza --</option>
+    </select>
+
+    <div class="box-avviso">
+      <strong>⚠️ NOTA PER LA COMPILAZIONE:</strong><br>
+      Nel caso di contratti pluriennali, è obbligatorio specificare nel campo <strong>NOTE</strong> (in fondo) come distribuire l'importo totale negli anni.<br>
+      <em id="pluriNoteExample">Es: anno corrente -> 2.000€; anno successivo -> 4.000€; anno +2 -> 4.000€</em>
+    </div>
+  </div>
+
+  <!-- SUB-SEZIONE 3: SPOT -->
+  <div id="sezSpot" class="sez-validita" style="border-left: 3px solid #107c41;">
+    <label id="labelMeseSpot" for="meseSpot" style="margin-top: 0;">Mese Liquidazione</label>
+    <select id="meseSpot">
+      <option value="">-- Seleziona Mese --</option>
+      <option value="Gennaio">Gennaio</option>
+      <option value="Febbraio">Febbraio</option>
+      <option value="Marzo">Marzo</option>
+      <option value="Aprile">Aprile</option>
+      <option value="Maggio">Maggio</option>
+      <option value="Giugno">Giugno</option>
+      <option value="Luglio">Luglio</option>
+      <option value="Agosto">Agosto</option>
+      <option value="Settembre">Settembre</option>
+      <option value="Ottobre">Ottobre</option>
+      <option value="Novembre">Novembre</option>
+      <option value="Dicembre">Dicembre</option>
+    </select>
+  </div>
+
+  <!-- 7. CONDIZIONATO: QUANTITÀ E COLLI -->
+  <div id="sezioneStima" style="display: none; margin-top: 12px; padding: 10px; background: #f9f9f9; border-left: 3px solid #0078d4;">
+    <label for="quantitaStima" style="margin-top: 0;">Quantità Stima (Intero)</label>
+    <input type="number" id="quantitaStima" step="1" min="1" placeholder="Inserisci quantità numerica...">
+
+    <label for="unitaMisura" style="margin-top: 10px;">Unità di Misura</label>
+    <select id="unitaMisura">
+      <option value="">-- Seleziona UDM --</option>
+      <option value="PEZZI">PEZZI</option>
+      <option value="COLLI">COLLI</option>
+      <option value="HL">HL</option>
+    </select>
+  </div>
+
+  <!-- SEZIONE CONDIZIONALE: ARTICOLI MERCE OMAGGIO -->
+  <div id="sezioneMerceOmaggio" style="display: none; margin-top: 12px; padding: 10px; background: #f9f9f9; border-left: 3px solid #107c41;">
+    <h3 style="margin: 0 0 10px 0; font-size: 13px; color: #107c41;">Dettaglio Merce Omaggio</h3>
+
+    <div style="display: grid; grid-template-columns: 1fr 90px; gap: 8px; align-items: end;">
+      <div>
+        <label for="codArticolo1" style="margin-top: 0;">Cod. Articolo #1 <span style="color: red;">*</span></label>
+        <input type="text" id="codArticolo1" placeholder="Codice articolo obbligatorio">
+      </div>
+      <div>
+        <label for="qtaArticolo1" style="margin-top: 0;">Q.tà <span style="color: red;">*</span></label>
+        <input type="number" id="qtaArticolo1" step="1" min="1" placeholder="Q.tà">
+      </div>
+
+      <div>
+        <label for="codArticolo2">Cod. Articolo #2</label>
+        <input type="text" id="codArticolo2" placeholder="Codice articolo facoltativo">
+      </div>
+      <div>
+        <label for="qtaArticolo2">Q.tà</label>
+        <input type="number" id="qtaArticolo2" step="1" min="1" placeholder="Q.tà">
+      </div>
+
+      <div>
+        <label for="codArticolo3">Cod. Articolo #3</label>
+        <input type="text" id="codArticolo3" placeholder="Codice articolo facoltativo">
+      </div>
+      <div>
+        <label for="qtaArticolo3">Q.tà</label>
+        <input type="number" id="qtaArticolo3" step="1" min="1" placeholder="Q.tà">
+      </div>
+    </div>
+
+    <div class="box-avviso" style="margin-top: 10px;">
+      Per il budget <strong>MERCE OMAGGIO</strong> è obbligatorio compilare almeno Cod. Articolo #1 e la relativa quantità.
+    </div>
+  </div>
+
+  <!-- SEZIONE DATI ECONOMICI & NOTE -->
+  <div id="sezioneEconomica" class="sez-economica" style="border-left: 3px solid #8660a9;">
+    <h3 style="margin: 0 0 10px 0; font-size: 13px; color: #8660a9;">Dati Economici & Note</h3>
+
+    <div id="pannelloImporti">
+      <label for="tipoImporto" style="margin-top: 0;">Tipo Importo</label>
+      <select id="tipoImporto" disabled>
+        <option value="Fisso">Fisso</option>
+        <option value="Variabile">Variabile</option>
+      </select>
+
+      <label for="importoReintegrato">Importo contributo fornitore (€)</label>
+      <input type="number" id="importoReintegrato" step="0.01" min="0.01" placeholder="Valore maggiore di 0..." disabled>
+
+      <label for="importoLiquidare">Importo da liquidare al cliente (€)</label>
+      <input type="number" id="importoLiquidare" step="0.01" min="0" placeholder="Inserire 0 oppure un valore maggiore di 0..." disabled>
+
+      <label for="importoExtra">Importo Extra Non Coperto (€)</label>
+      <input type="text" id="importoExtra" placeholder="Calcolato automaticamente..." readonly style="background: #f3f3f3; font-weight: bold; color: #d83b01;">
+    </div>
+
+    <div id="pannelloImportoFuoriBinario" style="display: none;">
+      <label id="labelImportoFuoriBinario" for="importoFuoriBinario" style="margin-top: 0;">Importo (€)</label>
+      <input type="number" id="importoFuoriBinario" step="0.01" min="0.01" placeholder="Valore maggiore di 0..." disabled>
+    </div>
+
+    <label for="noteIntervento">Note <span id="reqNote" style="color: red; display: none;">(Obbligatorio)</span></label>
+    <textarea id="noteIntervento" placeholder="Inserisci qui eventuali note, dettagli o la ripartizione pluriennale..." disabled></textarea>
+  </div>
+
+  <div class="button-group">
+    <button id="submitBtn" disabled>Genera Richiesta RV</button>
+    <button type="button" id="btnReset" class="btn-secondary" onclick="resetForm()">Pulisci Form</button>
+  </div>
+
+  <div id="log">Log eventi...</div>
+
+  <footer class="app-footer">
+    <span>Versione: v2.0.0 Roundtrip</span>
+  </footer>
+
+  <script>
+    const APP_VERSION = "Versione: v2.0.0 Roundtrip";
+    const POWER_AUTOMATE_URL = "https://default66e853deece344dd9d66ee6bdf4159.d4.environment.api.powerplatform.com/powerautomate/automations/direct/workflows/465577c70a414425a1f278e3c3f2bb43/triggers/manual/paths/invoke?api-version=1";
+
+    const DEBUG_MODE = false;
+
+const PERCORSO_RICHIESTA = {
+      fornitore: "fornitore",
+      partesa: "partesa",
+      omaggio: "omaggio"
+    };
+
+    const FINANCE_CC_RECIPIENTS = [
+      "finance@partesa.it"
+    ];
+
+    const IMPORTO_FUORI_BINARIO_LABELS = {
+      [PERCORSO_RICHIESTA.fuoriBinarioVerifica]: "Importo per il quale si chiede conferma di disponibilità reintegro (€)",
+      [PERCORSO_RICHIESTA.fuoriBinarioSenzaReintegro]: "Importo da liquidare al cliente (€)"
+    };
+
+    const ANNUAL_YEAR_OPTIONS = 2;
+    const PLURIENNALE_YEAR_OPTIONS = 5;
+    const SPECIAL_PARTESA_CODE = "PARTESA_SPECIAL";
+    const TIPOLOGIA_PLACEHOLDER_OPTION = "-- Seleziona Tipologia valida --";
+    const EMAIL_ADDRESS_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const DAYS_IN_MONTH_BASE = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    const PARTESA_SUPPLIER = {
+      code: SPECIAL_PARTESA_CODE,
+      label: "Partesa"
+    };
+    const BUDGET_LABELS = {
+      merceOmaggioBase: "MERCE OMAGGIO",
+      merceOmaggioPartesa: "MERCE OMAGGIO (Partesa)",
+      merceOmaggioReintegrata: "MERCE OMAGGIO (reintegrata da fornitore)"
+    };
+    const BUDGET_MODES = {
+      standard: "standard",
+      merceOmaggioPartesa: "merce_omaggio_partesa",
+      merceOmaggioReintegrata: "merce_omaggio_reintegrata"
+    };
+    const RECIPIENT_REGION_OVERRIDES = {
+      "f.zanoli@partesa.it": "6716",
+      "d.sabatini@partesa.it": "6716"
+    };
+    const PORTFOLIO_CC_RECIPIENTS = {
+      "6734": ["g.paruzzolo@partesa.it", "p.lorussi@partesa.it"],
+      "6724": ["g.paruzzolo@partesa.it", "p.lorussi@partesa.it"],
+      "6772": ["g.paruzzolo@partesa.it", "p.lorussi@partesa.it"],
+      "6716": ["g.angelici@partesa.it", "f.corinti@partesa.it"],
+      "6771": ["g.angelici@partesa.it", "f.corinti@partesa.it"],
+      "6765": ["f.difloriano@partesa.it", "p.gualtieri@partesa.it"],
+      "6770": ["f.difloriano@partesa.it", "p.gualtieri@partesa.it"],
+      "6760": ["f.difloriano@partesa.it", "p.gualtieri@partesa.it"]
+    };
+    const MERCE_OMAGGIO_SERVICE_RECIPIENTS = {
+      "6734": "service.adriatico@partesa.it",
+      "6716": "clienti.centro@partesa.it",
+      "6771": "clienti.centro@partesa.it",
+      "6724": "clienti.nordest@partesa.it",
+      "6772": "clienti.nordest@partesa.it",
+      "6765": "clienti.lombardia@partesa.it",
+      "6770": "clienti.lombardia@partesa.it",
+      "6760": "clienti.nordovest@partesa.it"
+    };
+
+    let fullDatabase = [];
+    let filteredDatabase = [];
+    let fornitoreTipologiaDb = [];
+    let budgetDb = [];
+    let selectedCustomer = null;
+    let selectedSupplier = null; // Memorizza { codice: "...", ragioneSociale: "..." }
+    let fornitoriDB = [];        // Conterrà l'array caricato da Fornitori.json
+    let userRegion = "";         // Verrà valorizzata con la Region dell'RV loggato
+    let highlightedIndex = -1;
+    let highlightedIndexTipologia = -1;
+    let userEmail = "";
+    let flowBlocked = false;
+
+    const logElement = document.getElementById("log");
+    const flowStatusMessage = document.getElementById("flowStatusMessage");
+    logElement.style.display = DEBUG_MODE ? "block" : "none";
+
+
+
+
+    function resetForm() {
+      if (!confirm("Sei sicuro di voler pulire tutti i campi del modulo?")) {
+        return;
+      }
+
+      // Reset Cliente
+      selectedCustomer = null;
+      document.getElementById("searchCliente").value = "";
+      document.getElementById("suggestions").innerHTML = "";
+      document.getElementById("suggestions").style.display = "none";
+      document.getElementById("gruppoCliente").value = "No";
+
+      // Reset Fornitore
+      selectedSupplier = null;
+      document.getElementById("inputFornitore").value = "";
+      document.getElementById("selectFornitore").value = "";
+      document.getElementById("suggestionsFornitore").innerHTML = "";
+      document.getElementById("suggestionsFornitore").style.display = "none";
+
+      // Reset Selezioni & Budget
+      document.getElementById("selectBudget").value = "";
+      document.getElementById("inputTipologia").value = "";
+      document.getElementById("selectTipologia").value = "";
+      document.getElementById("selectValidita").value = "";
+
+      // Reset campi economici
+      document.getElementById("tipoImporto").value = "Fisso";
+      document.getElementById("importoReintegrato").value = "";
+      document.getElementById("importoLiquidare").value = "";
+      document.getElementById("importoExtra").value = "";
+      document.getElementById("importoFuoriBinario").value = "";
+      document.getElementById("noteIntervento").value = "";
+
+      // Reset stime e articoli
+      document.getElementById("quantitaStima").value = "";
+      document.getElementById("unitaMisura").value = "";
+      for (let i = 1; i <= 3; i++) {
+        document.getElementById(`codArticolo${i}`).value = "";
+        document.getElementById(`qtaArticolo${i}`).value = "";
+      }
+
+      // Ripristina percorso
+      const selectPercorso = document.getElementById("selectPercorso");
+      selectPercorso.value = "";
+
+      // Disabilita controlli
+      document.getElementById("submitBtn").disabled = true;
+      document.getElementById("selectBudget").disabled = true;
+      document.getElementById("selectValidita").disabled = true;
+      document.getElementById("gruppoCliente").disabled = true;
+      document.getElementById("noteIntervento").disabled = true;
+      document.getElementById("inputFornitore").disabled = true;
+      document.getElementById("selectFornitore").disabled = true;
+      document.getElementById("inputTipologia").disabled = true;
+
+      // Aggiorna visibilità
+      if (typeof aggiornaVisibilitaPercorso === "function") {
+        aggiornaVisibilitaPercorso();
+      }
+
+      console.log("Form resettato con successo.");
+    }
+
+    function log(msg) {
+      if (!DEBUG_MODE) return;
+      logElement.textContent += "\n" + msg;
+      logElement.scrollTop = logElement.scrollHeight;
+      console.log(msg);
+    }
+
+    function showFlowMessage(message) {
+      flowStatusMessage.textContent = message;
+      flowStatusMessage.style.display = "block";
+    }
+
+    function clearFlowMessage() {
+      flowStatusMessage.textContent = "";
+      flowStatusMessage.style.display = "none";
+    }
+
+    function setFormDisabled(disabled) {
+      document.querySelectorAll("input, select, textarea, button").forEach(element => {
+        if (element.id === "importoExtra") {
+          element.disabled = true;
+          return;
+        }
+        element.disabled = disabled;
+      });
+    }
+
+    function blockFlow(message) {
+      flowBlocked = true;
+      setFormDisabled(true);
+      showFlowMessage(message);
+      log(`BLOCCO FLUSSO: ${message}`);
+    }
+
+    function normalizzaTesto(valore) {
+      return String(valore || "").trim().toUpperCase();
+    }
+
+    function getCurrentYear() {
+      return new Date().getFullYear();
+    }
+
+    function formatDateIT(dataString) {
+      const match = String(dataString || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (!match) return "";
+      const [, yearStr, monthStr, dayStr] = match;
+      const year = Number(yearStr);
+      const month = Number(monthStr);
+      const day = Number(dayStr);
+      const isLeapYear = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+      const daysInMonth = [...DAYS_IN_MONTH_BASE];
+      if (isLeapYear) {
+        daysInMonth[1] = 29;
+      }
+
+      if (month < 1 || month > 12) return "";
+      if (day < 1 || day > daysInMonth[month - 1]) return "";
+      return `${dayStr}/${monthStr}/${yearStr}`;
+    }
+
+    function estraiCodiceRegion(customer) {
+      const valoreRegion =
+        customer.region ?? customer.Region ??
+        customer.codRegion ?? customer.CodRegion ??
+        customer.codiceRegion ?? customer.CodiceRegion ??
+        customer.codBU ?? customer.CodBU ??
+        customer.bu ?? customer.BU ?? "";
+
+      const testo = String(valoreRegion).trim();
+      const matchCodice = testo.match(/\b(6716|6771|6734|6724|6772|6765|6770|6760)\b/);
+      return matchCodice ? matchCodice[1] : testo;
+    }
+
+    function resolveRecipientRegion(region, currentUserEmail) {
+      const cleanUserEmail = String(currentUserEmail || "").trim().toLowerCase();
+      const regionOverride = RECIPIENT_REGION_OVERRIDES[cleanUserEmail];
+      if (regionOverride) {
+        log(`[DEROGA ATTIVA] Utente ${cleanUserEmail}: Region forzata da ${region} a ${regionOverride}`);
+        return regionOverride;
+      }
+      return String(region || "").trim();
+    }
+
+    function getBudgetMode(budgetValue) {
+      const normalized = normalizzaTesto(budgetValue);
+      if (normalized === normalizzaTesto(BUDGET_LABELS.merceOmaggioPartesa)) {
+        return BUDGET_MODES.merceOmaggioPartesa;
+      }
+      if (normalized === normalizzaTesto(BUDGET_LABELS.merceOmaggioReintegrata)) {
+        return BUDGET_MODES.merceOmaggioReintegrata;
+      }
+      return BUDGET_MODES.standard;
+    }
+
+    function isMerceOmaggioMode(budgetMode) {
+      return budgetMode === BUDGET_MODES.merceOmaggioPartesa || budgetMode === BUDGET_MODES.merceOmaggioReintegrata;
+    }
+
+    function isDerivedMerceOmaggioBudgetMatch(normalizedBudget, normalizedValue) {
+      return normalizedBudget === normalizzaTesto(BUDGET_LABELS.merceOmaggioBase) &&
+        (normalizedValue === normalizzaTesto(BUDGET_LABELS.merceOmaggioPartesa) ||
+          normalizedValue === normalizzaTesto(BUDGET_LABELS.merceOmaggioReintegrata));
+    }
+
+    function buildRecipients({ region, budgetMode, importoDaLiquidare, currentUserEmail, rsmEmail, percorso }) {
+      const effectiveRegion = resolveRecipientRegion(region, currentUserEmail);
+
+      if (isMerceOmaggioMode(budgetMode)) {
+        const serviceRecipient = MERCE_OMAGGIO_SERVICE_RECIPIENTS[effectiveRegion] || "";
+        return {
+          toRecipients: serviceRecipient ? [serviceRecipient] : [],
+          ccRecipients: [],
+          effectiveRegion,
+          serviceRecipient
+        };
+      }
+
+      const portfolioCc = PORTFOLIO_CC_RECIPIENTS[effectiveRegion] || [];
+
+      if (percorso === PERCORSO_RICHIESTA.fuoriBinarioVerifica) {
+        return {
+          toRecipients: rsmEmail ? [rsmEmail] : [],
+          ccRecipients: [...portfolioCc],
+          effectiveRegion,
+          serviceRecipient: ""
+        };
+      }
+
+      if (percorso === PERCORSO_RICHIESTA.fuoriBinarioSenzaReintegro) {
+        const ccSet = new Set([...FINANCE_CC_RECIPIENTS, ...portfolioCc]);
+        return {
+          toRecipients: rsmEmail ? [rsmEmail] : [],
+          ccRecipients: [...ccSet],
+          effectiveRegion,
+          serviceRecipient: ""
+        };
+      }
+
+      const ccRecipients = new Set(portfolioCc);
+      if (Number(importoDaLiquidare) > 0) {
+        ccRecipients.add("contratti.clienti@partesa.it");
+      }
+
+      return {
+        toRecipients: rsmEmail ? [rsmEmail] : [],
+        ccRecipients: [...ccRecipients],
+        effectiveRegion,
+        serviceRecipient: ""
+      };
+    }
+
+    function getBudgetDefinition(budgetValue) {
+      const normalizedValue = normalizzaTesto(budgetValue);
+      return budgetDb.find(item => {
+        const normalizedBudget = normalizzaTesto(item.Budget);
+        return normalizedBudget === normalizedValue || isDerivedMerceOmaggioBudgetMatch(normalizedBudget, normalizedValue);
+      }) || null;
+    }
+
+    function getBudgetOptionLabels(item) {
+      const normalizedBudget = normalizzaTesto(item.Budget);
+      if (normalizedBudget === normalizzaTesto(BUDGET_LABELS.merceOmaggioBase)) {
+        return [BUDGET_LABELS.merceOmaggioPartesa, BUDGET_LABELS.merceOmaggioReintegrata];
+      }
+      return [item.Budget];
+    }
+
+    function inizializzaAnniDinamici() {
+      const currentYear = getCurrentYear();
+      const annoAnnuale = document.getElementById("annoAnnuale");
+      const annoFinePluri = document.getElementById("annoFinePluri");
+      const labelMeseInizioPluri = document.getElementById("labelMeseInizioPluri");
+      const labelMeseSpot = document.getElementById("labelMeseSpot");
+      const pluriNoteExample = document.getElementById("pluriNoteExample");
+
+      annoAnnuale.innerHTML = "";
+      for (let yearOffset = 0; yearOffset < ANNUAL_YEAR_OPTIONS; yearOffset++) {
+        const year = currentYear + yearOffset;
+        const option = document.createElement("option");
+        option.value = String(year);
+        option.textContent = String(year);
+        annoAnnuale.appendChild(option);
+      }
+
+      annoFinePluri.innerHTML = '<option value="">-- Seleziona Anno Scadenza --</option>';
+      for (let yearOffset = 0; yearOffset < PLURIENNALE_YEAR_OPTIONS; yearOffset++) {
+        const year = currentYear + yearOffset;
+        const option = document.createElement("option");
+        option.value = String(year);
+        option.textContent = String(year);
+        annoFinePluri.appendChild(option);
+      }
+
+      labelMeseInizioPluri.textContent = `Mese Partenza (Anno Corrente ${currentYear})`;
+      labelMeseSpot.textContent = `Mese Liquidazione (Anno Corrente ${currentYear})`;
+      pluriNoteExample.textContent = `Es: ${currentYear} -> 2.000€; ${currentYear + 1} -> 4.000€; ${currentYear + 2} -> 4.000€`;
+    }
+
+    function getOfficeUserEmail() {
+      const profile = Office.context.mailbox && Office.context.mailbox.userProfile;
+      const email = String(profile && profile.emailAddress ? profile.emailAddress : "").trim().toLowerCase();
+      return EMAIL_ADDRESS_REGEX.test(email) ? email : "";
+    }
+
+    function ensurePartesaOption(selectFornitore) {
+      let partesaOption = [...selectFornitore.options].find(option => option.value === PARTESA_SUPPLIER.code);
+      if (!partesaOption) {
+        partesaOption = document.createElement("option");
+        partesaOption.value = PARTESA_SUPPLIER.code;
+        partesaOption.textContent = PARTESA_SUPPLIER.label;
+        partesaOption.dataset.specialSupplier = "true";
+        selectFornitore.appendChild(partesaOption);
+      }
+      return partesaOption;
+    }
+
+    function removePartesaOption(selectFornitore) {
+      const partesaOption = [...selectFornitore.options].find(option => option.value === PARTESA_SUPPLIER.code);
+      if (partesaOption) {
+        partesaOption.remove();
+      }
+    }
+
+    function estraiFornitoriAbilitati(rawInput) {
+      if (!rawInput || rawInput === "*") return "*";
+
+      if (Array.isArray(rawInput)) {
+        return rawInput.map(String);
+      }
+
+      if (typeof rawInput === "string") {
+        let strClean = rawInput.trim();
+        if (strClean === "*") return "*";
+
+        if (strClean.startsWith("[") && strClean.endsWith("]")) {
+          try {
+            const parsed = JSON.parse(strClean);
+            if (Array.isArray(parsed)) {
+              return parsed.map(String);
+            }
+          } catch (e) {
+            return strClean
+              .replace(/[\[\]"]/g, "")
+              .split(",")
+              .map(s => s.trim())
+              .filter(Boolean);
+          }
+        }
+      }
+      return "*";
+    }
+
+    function rinfrescaBudgetDisponibili(codFornitoreSelezionato = "") {
+      const selectBudget = document.getElementById("selectBudget");
+      const valorePrecedente = selectBudget.value;
+
+      selectBudget.innerHTML = '<option value="">-- Seleziona Budget --</option>';
+      const budgetRenderizzati = new Set();
+
+      budgetDb.forEach(item => {
+        if (!item.Budget) return;
+
+        const fornitoriAmmessi = estraiFornitoriAbilitati(item.FornitoriAbilitati);
+        let visibile = false;
+
+        if (fornitoriAmmessi === "*" || !codFornitoreSelezionato) {
+          visibile = true;
+        } else if (Array.isArray(fornitoriAmmessi)) {
+          visibile = fornitoriAmmessi.includes(String(codFornitoreSelezionato).trim());
+        }
+
+        if (!visibile) return;
+
+        getBudgetOptionLabels(item).forEach(budgetLabel => {
+          if (budgetRenderizzati.has(budgetLabel)) return;
+          budgetRenderizzati.add(budgetLabel);
+
+          const opt = document.createElement("option");
+          opt.value = budgetLabel;
+          opt.textContent = budgetLabel;
+          selectBudget.appendChild(opt);
+        });
+      });
+
+      const opzioneAncoraValida = [...selectBudget.options].some(o => o.value === valorePrecedente);
+      if (valorePrecedente && opzioneAncoraValida) {
+        selectBudget.value = valorePrecedente;
+      } else {
+        selectBudget.value = "";
+        selectBudget.dispatchEvent(new Event("change"));
+      }
+    }
+
+    Office.onReady(async (info) => {
+      const params = new URLSearchParams(window.location.search);
+      const mode = params.get("mode") || "general";
+      const submitBtn = document.getElementById("submitBtn");
+      const selectBudget = document.getElementById("selectBudget");
+      const selectValidita = document.getElementById("selectValidita");
+      const selectFornitore = document.getElementById("selectFornitore");
+      const inputTipologia = document.getElementById("inputTipologia");
+      const selectTipologia = document.getElementById("selectTipologia");
+      const tipologiaLabel = document.getElementById("labelTipologia");
+      const tipologiaSearchContainer = document.getElementById("tipologiaSearchContainer");
+      const suggestionsTipologia = document.getElementById("suggestionsTipologia");
+      const searchInput = document.getElementById("searchCliente");
+      const suggestionsList = document.getElementById("suggestions");
+      const gruppoCliente = document.getElementById("gruppoCliente");
+      const noteIntervento = document.getElementById("noteIntervento");
+      const sezioneMerceOmaggio = document.getElementById("sezioneMerceOmaggio");
+      const sezioneStima = document.getElementById("sezioneStima");
+      const pannelloImporti = document.getElementById("pannelloImporti");
+      const tipoImporto = document.getElementById("tipoImporto");
+      const importoReintegrato = document.getElementById("importoReintegrato");
+      const importoLiquidare = document.getElementById("importoLiquidare");
+      const importoExtra = document.getElementById("importoExtra");
+      const pannelloImportoFuoriBinario = document.getElementById("pannelloImportoFuoriBinario");
+      const labelImportoFuoriBinario = document.getElementById("labelImportoFuoriBinario");
+      const importoFuoriBinario = document.getElementById("importoFuoriBinario");
+      const quantitaStima = document.getElementById("quantitaStima");
+      const unitaMisura = document.getElementById("unitaMisura");
+      const codArticolo1 = document.getElementById("codArticolo1");
+      const qtaArticolo1 = document.getElementById("qtaArticolo1");
+      const annoAnnuale = document.getElementById("annoAnnuale");
+      const dataInizioAnnuale = document.getElementById("dataInizioAnnuale");
+      const dataFineAnnuale = document.getElementById("dataFineAnnuale");
+      const meseInizioPluri = document.getElementById("meseInizioPluri");
+      const annoFinePluri = document.getElementById("annoFinePluri");
+      const meseSpot = document.getElementById("meseSpot");
+
+      submitBtn.textContent = mode === "attach" ? "Allega e Invia Richiesta RV" : "Apri e Invia Richiesta RV";
+     
+      async function caricaAnagraficaFornitori() {
+  try {
+    // Sostituisci l'URL con il link "Raw" effettivo del tuo file Fornitori.json su GitHub
+    const urlFornitori = "https://raw.githubusercontent.com/IL_TUO_UTENTE/TUA_REPO/main/Fornitori.json";
+    
+    const response = await fetch(urlFornitori);
+    if (!response.ok) {
+      throw new Error(`Errore HTTP nel recupero fornitori: ${response.status}`);
+    }
+    
+    fornitoriDB = await response.json();
+    console.log(`Caricati ${fornitoriDB.length} fornitori con successo.`);
+    
+    // Abilita l'input fornitore se il percorso lo consente
+    const inputFornitore = document.getElementById("inputFornitore");
+    if (inputFornitore && selectedCustomer && document.getElementById("selectPercorso").value === "fornitore") {
+      inputFornitore.disabled = false;
+      inputFornitore.placeholder = "Cerca fornitore per Codice o Ragione Sociale...";
+    }
+  } catch (error) {
+    console.error("Impossibile caricare il file Fornitori.json:", error);
+    const inputFornitore = document.getElementById("inputFornitore");
+    if (inputFornitore) {
+      inputFornitore.placeholder = "Errore caricamento fornitori";
+    }
+  }
+}
+      inizializzaAnniDinamici();
+
+      userEmail = getOfficeUserEmail();
+      if (!userEmail) {
+        blockFlow("Impossibile identificare l’utente Office. Il flusso è stato disabilitato: ricaricare l’add-in o contattare il supporto.");
+        return;
+      }
+
+      const urlClienti = "https://giuseppeangelici-coder.github.io/outlook-addin-test/QryCustomerMaster.json";
+      const urlFornitori = "https://giuseppeangelici-coder.github.io/outlook-addin-test/FornitoriTipologie.json";
+      const urlBudget = "https://giuseppeangelici-coder.github.io/outlook-addin-test/Budget.json";
+      const urlPortfolio = "https://giuseppeangelici-coder.github.io/outlook-addin-test/emailPORTFOLIO.json";
+      const urlRSM = "https://giuseppeangelici-coder.github.io/outlook-addin-test/emailRSM.json";
+
+      function clearTipologiaSelection() {
+        inputTipologia.value = "";
+        selectTipologia.innerHTML = `<option value="">${TIPOLOGIA_PLACEHOLDER_OPTION}</option>`;
+        selectTipologia.value = "";
+        suggestionsTipologia.innerHTML = "";
+        suggestionsTipologia.style.display = "none";
+        highlightedIndexTipologia = -1;
+      }
+
+      function getTipologieFiltrate(codFornitore = "") {
+        return fornitoreTipologiaDb.filter(item =>
+          codFornitore === "" || String(item.CodFornitore).trim() === String(codFornitore).trim()
+        );
+      }
+
+      function popolaTipologiePerFornitore(codFornitore, tipologiaSelezionata = "") {
+        selectTipologia.innerHTML = `<option value="">${TIPOLOGIA_PLACEHOLDER_OPTION}</option>`;
+        getTipologieFiltrate(codFornitore).forEach(item => {
+          const option = document.createElement("option");
+          option.value = String(item.TipologiaIntervento || "").trim();
+          option.textContent = String(item.TipologiaIntervento || "").trim();
+          selectTipologia.appendChild(option);
+        });
+        if (tipologiaSelezionata) {
+          selectTipologia.value = tipologiaSelezionata;
+        }
+      }
+
+      function aggiornaModalitaTipologia() {
+        const percorsoAttuale = document.getElementById("selectPercorso").value;
+        if (percorsoAttuale === PERCORSO_RICHIESTA.fuoriBinarioVerifica || percorsoAttuale === PERCORSO_RICHIESTA.fuoriBinarioSenzaReintegro) {
+          tipologiaLabel.style.display = "none";
+          tipologiaSearchContainer.style.display = "none";
+          selectTipologia.style.display = "none";
+          inputTipologia.disabled = true;
+          selectTipologia.disabled = true;
+          return;
+        }
+
+        const budgetMode = getBudgetMode(selectBudget.value);
+        const hideTipologia = isMerceOmaggioMode(budgetMode);
+        const hasSupplier = !!selectFornitore.value;
+
+        if (hideTipologia) {
+          tipologiaLabel.style.display = "none";
+          tipologiaSearchContainer.style.display = "none";
+          selectTipologia.style.display = "none";
+          inputTipologia.disabled = true;
+          selectTipologia.disabled = true;
+          clearTipologiaSelection();
+          return;
+        }
+
+        tipologiaLabel.style.display = "block";
+        if (hasSupplier) {
+          tipologiaLabel.textContent = "Tipologia Intervento";
+          tipologiaSearchContainer.style.display = "none";
+          selectTipologia.style.display = "block";
+          inputTipologia.disabled = true;
+          selectTipologia.disabled = !selectedCustomer;
+          popolaTipologiePerFornitore(selectFornitore.value, selectTipologia.value);
+        } else {
+          tipologiaLabel.textContent = "Tipologia Intervento (Cerca linea/prodotto)";
+          tipologiaSearchContainer.style.display = "block";
+          selectTipologia.style.display = "none";
+          inputTipologia.disabled = !selectedCustomer;
+          selectTipologia.disabled = true;
+          selectTipologia.innerHTML = `<option value="">${TIPOLOGIA_PLACEHOLDER_OPTION}</option>`;
+        }
+      }
+
+      function applicaRegoleBudgetSpeciali() {
+        const budgetMode = getBudgetMode(selectBudget.value);
+
+        if (budgetMode === BUDGET_MODES.merceOmaggioPartesa) {
+          ensurePartesaOption(selectFornitore);
+          selectFornitore.value = PARTESA_SUPPLIER.code;
+          selectFornitore.disabled = true;
+          clearTipologiaSelection();
+        } else {
+          const wasPartesa = selectFornitore.value === PARTESA_SUPPLIER.code;
+          selectFornitore.disabled = !selectedCustomer;
+          if (wasPartesa) {
+            selectFornitore.value = "";
+          }
+          removePartesaOption(selectFornitore);
+          if (wasPartesa) {
+            rinfrescaBudgetDisponibili("");
+          }
+        }
+
+        if (budgetMode === BUDGET_MODES.merceOmaggioReintegrata && selectFornitore.value === PARTESA_SUPPLIER.code) {
+          selectFornitore.value = "";
+        }
+
+        aggiornaModalitaTipologia();
+      }
+
+      function applyRowLevelSecurity(email, portfolioList, rsmList) {
+        const cleanEmail = email.toLowerCase().trim();
+        const superUsersGlobal = portfolioList.map(u => (u.email || "").toLowerCase().trim());
+        const rsmUsers = rsmList.map(u => (u.email || "").toLowerCase().trim());
+
+        if (superUsersGlobal.includes(cleanEmail)) {
+          filteredDatabase = fullDatabase;
+          log("Accesso concesso come Super User Globale.");
+        } else if (rsmUsers.includes(cleanEmail)) {
+          filteredDatabase = fullDatabase.filter(c =>
+            (c.emailResponsabileCommerciale || c.EmailResponsabileCommerciale || "").toLowerCase().trim() === cleanEmail
+          );
+          log(`Accesso concesso come RSM. Righe filtrate: ${filteredDatabase.length}`);
+        } else if (fullDatabase.some(c => (c.emailResponsabileVendite || c.EmailResponsabileVendite || "").toLowerCase().trim() === cleanEmail)) {
+          filteredDatabase = fullDatabase.filter(c =>
+            (c.emailResponsabileVendite || c.EmailResponsabileVendite || "").toLowerCase().trim() === cleanEmail
+          );
+          log(`Accesso concesso come RV. Righe filtrate: ${filteredDatabase.length}`);
+        } else {
+          filteredDatabase = [];
+          log("ATTENZIONE: Utente non autorizzato o non presente nelle anagrafiche. Accesso negato.");
+        }
+
+        if (filteredDatabase.length > 0) {
+          clearFlowMessage();
+          searchInput.disabled = false;
+          searchInput.placeholder = "Cerca per Codice o Nome...";
+        } else {
+          searchInput.disabled = true;
+          searchInput.placeholder = "Nessun cliente abilitato per questo profilo.";
+          showFlowMessage("Nessun cliente abilitato per questo profilo Office.");
+        }
+      }
+
+      function popolaFornitoriUnivoci() {
+        const fornitoriVisti = new Set();
+        fornitoreTipologiaDb.forEach(item => {
+          const cod = String(item.CodFornitore || "").trim();
+          const ragSoc = String(item.RagioneSocialeFornitore || "").trim();
+          if (cod && ragSoc && !fornitoriVisti.has(cod)) {
+            fornitoriVisti.add(cod);
+            const opt = document.createElement("option");
+            opt.value = cod;
+            opt.textContent = ragSoc;
+            selectFornitore.appendChild(opt);
+          }
+        });
+      }
+
+      function rinfrescaObbligatorietaNote() {
+        const tipoValidita = selectValidita.value;
+        const reqNote = document.getElementById("reqNote");
+        const isMerceOmaggio = isMerceOmaggioMode(getBudgetMode(selectBudget.value));
+        if (tipoValidita === "pluriennale" || (!isMerceOmaggio && tipoImporto.value === "Variabile")) {
+          reqNote.style.display = "inline";
+        } else {
+          reqNote.style.display = "none";
+        }
+      }
+
+      function setupGestioneBudgetEvents() {
+        selectBudget.addEventListener("change", () => {
+          const budgetSelezionato = selectBudget.value;
+          const budgetMode = getBudgetMode(budgetSelezionato);
+          const isMerceOmaggio = isMerceOmaggioMode(budgetMode);
+          const match = getBudgetDefinition(budgetSelezionato);
+          const obbligoStima = match && (match.ObbligoStima === true || String(match.ObbligoStima).toLowerCase() === "vero" || String(match.ObbligoStima).toLowerCase() === "true");
+
+          if (obbligoStima) {
+            sezioneStima.style.display = "block";
+            quantitaStima.required = true;
+            unitaMisura.required = true;
+          } else {
+            sezioneStima.style.display = "none";
+            quantitaStima.required = false;
+            unitaMisura.required = false;
+            quantitaStima.value = "";
+            unitaMisura.value = "";
+          }
+
+          sezioneMerceOmaggio.style.display = isMerceOmaggio ? "block" : "none";
+          codArticolo1.required = isMerceOmaggio;
+          qtaArticolo1.required = isMerceOmaggio;
+
+          pannelloImporti.style.display = isMerceOmaggio ? "none" : "block";
+          tipoImporto.disabled = isMerceOmaggio || !selectedCustomer;
+          importoReintegrato.disabled = isMerceOmaggio || !selectedCustomer;
+          importoLiquidare.disabled = isMerceOmaggio || !selectedCustomer;
+
+          if (isMerceOmaggio) {
+            tipoImporto.value = "Fisso";
+            importoReintegrato.value = "";
+            importoLiquidare.value = "";
+            importoExtra.value = "";
+          } else {
+            for (let i = 1; i <= 3; i++) {
+              document.getElementById(`codArticolo${i}`).value = "";
+              document.getElementById(`qtaArticolo${i}`).value = "";
+            }
+          }
+
+          applicaRegoleBudgetSpeciali();
+          rinfrescaObbligatorietaNote();
+        });
+      }
+
+      function setupGestioneValidita() {
+        const sezioni = {
+          annuale: document.getElementById("sezAnnuale"),
+          pluriennale: document.getElementById("sezPluriennale"),
+          spot: document.getElementById("sezSpot")
+        };
+
+        function allineaVincoliAnnoAnnuale() {
+          const anno = annoAnnuale.value;
+          if (!dataFineAnnuale.value) {
+            dataFineAnnuale.value = `${anno}-12-31`;
+          }
+          dataInizioAnnuale.min = `${anno}-01-01`;
+          dataInizioAnnuale.max = `${anno}-12-31`;
+          dataFineAnnuale.min = `${anno}-01-01`;
+          dataFineAnnuale.max = `${anno}-12-31`;
+          if (dataInizioAnnuale.value && !dataInizioAnnuale.value.startsWith(anno)) dataInizioAnnuale.value = "";
+          if (dataFineAnnuale.value && !dataFineAnnuale.value.startsWith(anno)) dataFineAnnuale.value = "";
+        }
+
+        selectValidita.addEventListener("change", () => {
+          Object.values(sezioni).forEach(sezione => {
+            sezione.style.display = "none";
+          });
+          dataInizioAnnuale.required = false;
+          dataFineAnnuale.required = false;
+          meseInizioPluri.required = false;
+          annoFinePluri.required = false;
+          meseSpot.required = false;
+
+          const validita = selectValidita.value;
+          if (validita && sezioni[validita]) {
+            sezioni[validita].style.display = "block";
+            if (validita === "annuale") {
+              dataInizioAnnuale.required = true;
+              dataFineAnnuale.required = true;
+              allineaVincoliAnnoAnnuale();
+            } else if (validita === "pluriennale") {
+              meseInizioPluri.required = true;
+              annoFinePluri.required = true;
+            } else if (validita === "spot") {
+              meseSpot.required = true;
+            }
+          }
+          rinfrescaObbligatorietaNote();
+        });
+
+        annoAnnuale.addEventListener("change", allineaVincoliAnnoAnnuale);
+      }
+
+      function setupLogicaEconomica() {
+        tipoImporto.addEventListener("change", () => {
+          rinfrescaObbligatorietaNote();
+        });
+
+        function rinfrescaCalcoloExtra() {
+          const r = parseFloat(importoReintegrato.value);
+          const l = parseFloat(importoLiquidare.value);
+          if (!isNaN(r) && !isNaN(l) && l > r) {
+            importoExtra.value = (l - r).toFixed(2) + " €";
+          } else {
+            importoExtra.value = "";
+          }
+        }
+
+        importoReintegrato.addEventListener("input", rinfrescaCalcoloExtra);
+        importoLiquidare.addEventListener("input", rinfrescaCalcoloExtra);
+      }
+
+function aggiornaPercorsoGuida(percorso) {
+      const el = document.getElementById("percorsoGuida");
+      if (!el) return;
+
+      if (percorso === PERCORSO_RICHIESTA.fornitore) {
+        el.innerText = "Percorso 1: Richiesta di contributo/reintegro a fronte di accordo con Fornitore.";
+        el.style.display = "block";
+      } else if (percorso === PERCORSO_RICHIESTA.partesa) {
+        el.innerText = "Percorso 2: Richiesta di investimento con costi a diretto carico Partesa.";
+        el.style.display = "block";
+      } else if (percorso === PERCORSO_RICHIESTA.omaggio) {
+        el.innerText = "Percorso 3: Assegnazione di merce omaggio a cliente.";
+        el.style.display = "block";
+      } else {
+        el.innerText = "";
+        el.style.display = "none";
+      }
+    }
+
+    
+      // MODIFICA BUG: Gestione pulita e isolata delle sezioni visibili (Versione 3 Binari)
+      window.aggiornaVisibilitaPercorso = function() {
+        const percorso = document.getElementById("selectPercorso").value;
+        const percorsoGuida = document.getElementById("percorsoGuida");
+
+        // Contenitori ed Elementi DOM da gestire
+        const containerGruppo = document.getElementById("containerGruppo");
+        const containerFornitore = document.getElementById("containerFornitore");
+        const containerBudget = document.getElementById("containerBudget");
+        const containerTipologia = document.getElementById("containerTipologia");
+        const containerValidita = document.getElementById("containerValidita");
+        const containerEconomica = document.getElementById("containerEconomica");
+        const containerOmaggio = document.getElementById("containerOmaggio");
+
+        const inputFornitore = document.getElementById("inputFornitore");
+        const selectFornitore = document.getElementById("selectFornitore");
+
+        // Aggiorna o pulisci il messaggio di guida
+        if (typeof aggiornaPercorsoGuida === "function") {
+          aggiornaPercorsoGuida(percorso);
+        } else if (percorsoGuida) {
+          percorsoGuida.innerText = "";
+          percorsoGuida.style.display = "none";
+        }
+
+        if (percorso === PERCORSO_RICHIESTA.fornitore) {
+          // BINARIO 1: Investimento coperto da fornitore
+          if (containerGruppo) containerGruppo.style.display = "block";
+          if (containerFornitore) containerFornitore.style.display = "block";
+          if (containerBudget) containerBudget.style.display = "block";
+          if (containerTipologia) containerTipologia.style.display = "block";
+          if (containerValidita) containerValidita.style.display = "block";
+          if (containerEconomica) containerEconomica.style.display = "block";
+          if (containerOmaggio) containerOmaggio.style.display = "none";
+
+          // Abilita la ricerca fornitore se c'è un cliente selezionato
+          if (inputFornitore) inputFornitore.disabled = !selectedCustomer;
+
+        } else if (percorso === PERCORSO_RICHIESTA.partesa) {
+          // BINARIO 2: Investimento a carico Partesa
+          if (containerGruppo) containerGruppo.style.display = "block";
+          if (containerFornitore) containerFornitore.style.display = "none";
+          if (containerBudget) containerBudget.style.display = "block";
+          if (containerTipologia) containerTipologia.style.display = "block";
+          if (containerValidita) containerValidita.style.display = "block";
+          if (containerEconomica) containerEconomica.style.display = "block";
+          if (containerOmaggio) containerOmaggio.style.display = "none";
+
+        } else if (percorso === PERCORSO_RICHIESTA.omaggio) {
+          // BINARIO 3: Merce omaggio
+          if (containerGruppo) containerGruppo.style.display = "none";
+          if (containerFornitore) containerFornitore.style.display = "block";
+          if (containerBudget) containerBudget.style.display = "none";
+          if (containerTipologia) containerTipologia.style.display = "none";
+          if (containerValidita) containerValidita.style.display = "none";
+          if (containerEconomica) containerEconomica.style.display = "none";
+          if (containerOmaggio) containerOmaggio.style.display = "block";
+
+          // Imposta automaticamente Fornitore = "Partesa" e blocca
+          if (inputFornitore) {
+            inputFornitore.value = "PARTESA S.P.A. (PARTESA)";
+            inputFornitore.disabled = true;
+          }
+          if (selectFornitore) {
+            selectFornitore.value = "PARTESA";
+          }
+          selectedSupplier = { codice: "PARTESA", ragioneSociale: "PARTESA S.P.A." };
+
+        } else {
+          // NESSUN PERCORSO SELEZIONATO
+          if (containerGruppo) containerGruppo.style.display = "block";
+          if (containerFornitore) containerFornitore.style.display = "block";
+          if (containerBudget) containerBudget.style.display = "block";
+          if (containerTipologia) containerTipologia.style.display = "block";
+          if (containerValidita) containerValidita.style.display = "block";
+          if (containerEconomica) containerEconomica.style.display = "block";
+          if (containerOmaggio) containerOmaggio.style.display = "none";
+
+          if (inputFornitore) {
+            inputFornitore.value = "";
+            inputFornitore.disabled = true;
+          }
+        }
+
+        // Valida lo stato del pulsante di invio dopo il cambio visibilità
+        if (typeof validaForm === "function") {
+          validaForm();
+        }
+      };
+
+      function setupGestionePercorso() {
+        const selectPercorso = document.getElementById("selectPercorso");
+        selectPercorso.addEventListener("change", () => {
+          window.aggiornaVisibilitaPercorso();
+        });
+      }
+
+      function selezionaTipologia(item) {
+        const targetCodice = String(item.CodFornitore || "").trim();
+        const targetTipologia = String(item.TipologiaIntervento || "").trim();
+        const optionEsistente = [...selectFornitore.options].find(option => String(option.value).trim() === targetCodice);
+        if (!optionEsistente) return;
+
+        inputTipologia.value = targetTipologia;
+        selectFornitore.value = optionEsistente.value;
+        rinfrescaBudgetDisponibili(selectFornitore.value);
+        applicaRegoleBudgetSpeciali();
+        popolaTipologiePerFornitore(selectFornitore.value, targetTipologia);
+        selectTipologia.value = targetTipologia;
+        suggestionsTipologia.style.display = "none";
+        highlightedIndexTipologia = -1;
+      }
+
+      function costruisciSuggerimentiTipologia(elenco) {
+        suggestionsTipologia.innerHTML = "";
+        if (elenco.length === 0) {
+          suggestionsTipologia.style.display = "none";
+          return;
+        }
+        suggestionsTipologia.style.display = "block";
+        elenco.forEach(item => {
+          const li = document.createElement("li");
+          li.textContent = item.TipologiaIntervento;
+          li.itemData = item;
+          li.addEventListener("click", () => selezionaTipologia(item));
+          suggestionsTipologia.appendChild(li);
+        });
+      }
+
+      function tryResolveTipologiaFromInput() {
+        const rawValue = inputTipologia.value.trim();
+        if (!rawValue) return null;
+        const matches = getTipologieFiltrate("").filter(item =>
+          String(item.TipologiaIntervento || "").trim() === rawValue
+        );
+        if (matches.length === 1) {
+          selezionaTipologia(matches[0]);
+          return matches[0];
+        }
+        return null;
+      }
+
+      selectFornitore.addEventListener("change", () => {
+        if (selectFornitore.value !== PARTESA_SUPPLIER.code) {
+          clearTipologiaSelection();
+        }
+        rinfrescaBudgetDisponibili(selectFornitore.value);
+        applicaRegoleBudgetSpeciali();
+      });
+
+      selectTipologia.addEventListener("change", () => {
+        inputTipologia.value = selectTipologia.value;
+      });
+
+      inputTipologia.addEventListener("input", () => {
+        highlightedIndexTipologia = -1;
+        const query = inputTipologia.value.toLowerCase().trim();
+        if (query.length < 1) {
+          suggestionsTipologia.style.display = "none";
+          return;
+        }
+
+        const filtrate = getTipologieFiltrate("").filter(item =>
+          String(item.TipologiaIntervento || "").toLowerCase().includes(query)
+        ).slice(0, 15);
+        costruisciSuggerimentiTipologia(filtrate);
+      });
+
+      inputTipologia.addEventListener("focus", () => {
+        if (inputTipologia.value.trim() === "") {
+          costruisciSuggerimentiTipologia(getTipologieFiltrate("").slice(0, 15));
+        }
+      });
+
+      inputTipologia.addEventListener("blur", () => {
+        window.setTimeout(() => {
+          if (!selectFornitore.value) {
+            tryResolveTipologiaFromInput();
+          }
+        }, 150);
+      });
+
+      inputTipologia.addEventListener("keydown", (e) => {
+        const items = suggestionsTipologia.querySelectorAll("li");
+        if (items.length === 0) return;
+
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          highlightedIndexTipologia = highlightedIndexTipologia < items.length - 1 ? highlightedIndexTipologia + 1 : 0;
+          updateHighlightTipologia(items);
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault();
+          highlightedIndexTipologia = highlightedIndexTipologia > 0 ? highlightedIndexTipologia - 1 : items.length - 1;
+          updateHighlightTipologia(items);
+        } else if (e.key === "Enter") {
+          if (highlightedIndexTipologia >= 0) {
+            e.preventDefault();
+            selezionaTipologia(items[highlightedIndexTipologia].itemData);
+          }
+        } else if (e.key === "Escape") {
+          suggestionsTipologia.style.display = "none";
+          highlightedIndexTipologia = -1;
+        }
+      });
+
+      // --- GESTIONE AUTOCOMPLETE FORNITORE (Basato su Fornitori.json) ---
+
+document.getElementById("inputFornitore").addEventListener("input", function (e) {
+  const query = e.target.value.trim().toLowerCase();
+  const suggestionsBox = document.getElementById("suggestionsFornitore");
+
+  if (query.length < 2) {
+    suggestionsBox.innerHTML = "";
+    suggestionsBox.style.display = "none";
+    return;
+  }
+
+  // Filtro combinato:
+  // 1. Il fornitore deve appartenere alla Region dell'RV oppure avere Region "ALL"/"TUTTE" (jolly)
+  // 2. Il testo digitato deve corrispondere a CodFornitore o RagSocFornitore
+  const risultati = fornitoriDB.filter(f => {
+    const regFornitore = (f.Region || "").toUpperCase();
+    const regUtente = (userRegion || "").toUpperCase();
+    
+    const appartieneAllaRegion = (regFornitore === regUtente || regFornitore === "ALL" || regFornitore === "TUTTE");
+    
+    const corrispondeTesto = 
+      (f.RagSocFornitore && f.RagSocFornitore.toLowerCase().includes(query)) ||
+      (f.CodFornitore && f.CodFornitore.toLowerCase().includes(query));
+    
+    return appartieneAllaRegion && corrispondeTesto;
+  }).slice(0, 10); // Limita ai primi 10 risultati per reattività
+
+  mostraSuggerimentiFornitore(risultati);
+});
+
+// Rendering della lista dei suggerimenti nel DOM
+function mostraSuggerimentiFornitore(lista) {
+  const suggestionsBox = document.getElementById("suggestionsFornitore");
+  suggestionsBox.innerHTML = "";
+
+  if (lista.length === 0) {
+    suggestionsBox.style.display = "none";
+    return;
+  }
+
+  lista.forEach(f => {
+    const li = document.createElement("li");
+    // Adattato alle chiavi esatte del tuo JSON: RagSocFornitore e CodFornitore
+    li.textContent = `${f.RagSocFornitore} (${f.CodFornitore})`;
+    li.addEventListener("click", () => selezionaFornitore(f));
+    suggestionsBox.appendChild(li);
+  });
+
+  suggestionsBox.style.display = "block";
+}
+
+// Chiusura del box suggerimenti se si clicca al di fuori del contenitore
+document.addEventListener("click", function (e) {
+  const container = document.getElementById("fornitoreSearchContainer");
+  if (container && !container.contains(e.target)) {
+    document.getElementById("suggestionsFornitore").style.display = "none";
+  }
+});
+
+// Azione al click su un fornitore della lista
+function selezionaFornitore(fornitore) {
+  selectedSupplier = {
+    codice: fornitore.CodFornitore,
+    ragioneSociale: fornitore.RagSocFornitore
+  };
+  
+  const inputFornitore = document.getElementById("inputFornitore");
+  const selectFornitore = document.getElementById("selectFornitore");
+  const suggestionsBox = document.getElementById("suggestionsFornitore");
+
+  inputFornitore.value = `${fornitore.RagSocFornitore} (${fornitore.CodFornitore})`;
+  selectFornitore.value = fornitore.CodFornitore;
+  suggestionsBox.innerHTML = "";
+  suggestionsBox.style.display = "none";
+
+  console.log("Fornitore selezionato:", selectedSupplier);
+
+  // Aggiorna eventuali dipendenze (es. caricamento budget filtrati per questo codice fornitore)
+  if (typeof caricaBudgetPerFornitore === "function") {
+    caricaBudgetPerFornitore(fornitore.CodFornitore);
+  }
+
+  // Ri-valida il form
+  if (typeof validaForm === "function") {
+    validaForm();
+  }
+}
+
+      function updateHighlightTipologia(items) {
+        items.forEach(item => item.classList.remove("highlight"));
+        if (highlightedIndexTipologia >= 0) {
+          items[highlightedIndexTipologia].classList.add("highlight");
+          items[highlightedIndexTipologia].scrollIntoView({ block: "nearest" });
+        }
+      }
+
+      document.addEventListener("click", (e) => {
+        if (!e.target.closest("#inputTipologia") && !e.target.closest("#suggestionsTipologia")) {
+          suggestionsTipologia.style.display = "none";
+        }
+      });
+
+      searchInput.addEventListener("input", (e) => {
+        highlightedIndex = -1;
+        const query = e.target.value.toLowerCase().trim();
+        suggestionsList.innerHTML = "";
+        suggestionsList.style.display = "none";
+
+        if (query.length < 2) return;
+
+        const filtered = filteredDatabase.filter(c => {
+          const chiave = c.searchKey || c.SearchKey || "";
+          return chiave.toLowerCase().includes(query);
+        }).slice(0, 10);
+
+        if (filtered.length > 0) {
+          suggestionsList.style.display = "block";
+          filtered.forEach(c => {
+            const li = document.createElement("li");
+            li.textContent = c.searchKey || c.SearchKey || "";
+            li.customerData = c;
+            li.addEventListener("click", () => selectCustomer(c));
+            suggestionsList.appendChild(li);
+          });
+        }
+      });
+
+      searchInput.addEventListener("keydown", (e) => {
+        const items = suggestionsList.querySelectorAll("li");
+        if (items.length === 0) return;
+
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          highlightedIndex = highlightedIndex < items.length - 1 ? highlightedIndex + 1 : 0;
+          updateHighlight(items);
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault();
+          highlightedIndex = highlightedIndex > 0 ? highlightedIndex - 1 : items.length - 1;
+          updateHighlight(items);
+        } else if (e.key === "Enter") {
+          if (highlightedIndex >= 0) {
+            e.preventDefault();
+            selectCustomer(items[highlightedIndex].customerData);
+          }
+        } else if (e.key === "Escape") {
+          suggestionsList.style.display = "none";
+          highlightedIndex = -1;
+        }
+      });
+
+      function updateHighlight(items) {
+        items.forEach(item => item.classList.remove("highlight"));
+        if (highlightedIndex >= 0) {
+          items[highlightedIndex].classList.add("highlight");
+          items[highlightedIndex].scrollIntoView({ block: "nearest" });
+        }
+      }
+
+      function selectCustomer(customer) {
+        suggestionsList.style.display = "none";
+        highlightedIndex = -1;
+        selectedCustomer = customer;
+        searchInput.value = customer.searchKey || customer.SearchKey || "";
+
+        clearFlowMessage();
+        selectBudget.disabled = false;
+        selectValidita.disabled = false;
+        gruppoCliente.disabled = false;
+        noteIntervento.disabled = false;
+        selectFornitore.disabled = false;
+        inputTipologia.disabled = false;
+
+        const currentBudgetMode = getBudgetMode(selectBudget.value);
+        const isMerceOmaggio = isMerceOmaggioMode(currentBudgetMode);
+        tipoImporto.disabled = isMerceOmaggio;
+        importoReintegrato.disabled = isMerceOmaggio;
+        importoLiquidare.disabled = isMerceOmaggio;
+
+        window.aggiornaVisibilitaPercorso();
+        submitBtn.disabled = false;
+        log("Cliente " + (customer.codPdV || customer.CodPdV) + " agganciato.");
+      }
+
+      try {
+        const [resClienti, resFornitori, resBudget, resPortfolio, resRSM] = await Promise.all([
+          fetch(urlClienti),
+          fetch(urlFornitori),
+          fetch(urlBudget),
+          fetch(urlPortfolio),
+          fetch(urlRSM)
+        ]);
+
+        if (!resClienti.ok) throw new Error("Errore database clienti");
+        if (!resFornitori.ok) throw new Error("Errore database fornitori");
+        if (!resBudget.ok) throw new Error("Errore database budget");
+        if (!resPortfolio.ok) throw new Error("Errore database superusers portfolio");
+        if (!resRSM.ok) throw new Error("Errore database regional manager");
+
+        fullDatabase = await resClienti.json();
+        fornitoreTipologiaDb = await resFornitori.json();
+        budgetDb = await resBudget.json();
+        const portfolioDb = await resPortfolio.json();
+        const rsmDb = await resRSM.json();
+
+        log("Database e file permessi caricati.");
+        applyRowLevelSecurity(userEmail, portfolioDb, rsmDb);
+        popolaFornitoriUnivoci();
+        rinfrescaBudgetDisponibili("");
+        setupGestioneBudgetEvents();
+        setupGestioneValidita();
+        setupLogicaEconomica();
+        setupGestionePercorso();
+        document.getElementById("selectPercorso").disabled = false;
+        aggiornaModalitaTipologia();
+      } catch (err) {
+        blockFlow("Errore caricamento dati: " + err.message);
+      }
+
+      submitBtn.addEventListener("click", () => {
+        if (flowBlocked) {
+          alert("Impossibile procedere: il flusso è bloccato. Verificare il messaggio mostrato nell'interfaccia e ricaricare l'add-in se necessario.");
+          return;
+        }
+        if (!selectedCustomer) return;
+
+        const percorsoSelezionato = document.getElementById("selectPercorso").value;
+        if (!percorsoSelezionato) {
+          alert("Errore: selezionare il Percorso Richiesta prima di procedere.");
+          return;
+        }
+        const isPercorsoFuoriBinario = percorsoSelezionato === PERCORSO_RICHIESTA.fuoriBinarioVerifica || percorsoSelezionato === PERCORSO_RICHIESTA.fuoriBinarioSenzaReintegro;
+
+        // ─────────────────────────────────────────────────────────
+        // PERCORSO FUORI BINARIO (2 e 3) — validazione e invio
+        // ─────────────────────────────────────────────────────────
+        if (isPercorsoFuoriBinario) {
+          if (!selectFornitore.value) {
+            alert("Errore: il Fornitore è obbligatorio.");
+            return;
+          }
+          const valImportoFuori = parseFloat(importoFuoriBinario.value);
+          if (!importoFuoriBinario.value || isNaN(valImportoFuori) || valImportoFuori <= 0) {
+            alert("Errore: l'Importo è obbligatorio e deve essere maggiore di 0.");
+            return;
+          }
+          const txtNoteFuori = noteIntervento.value.trim();
+          if (!txtNoteFuori) {
+            alert("Errore: il campo Note/Descrizione è obbligatorio per i percorsi fuori binario.");
+            return;
+          }
+          const tipoValiditaFuori = selectValidita.value;
+          if (!tipoValiditaFuori) {
+            alert("Errore: selezionare un Periodo Validità dal menu a tendina.");
+            return;
+          }
+          let stringaDettaglioValiditaFuori = "";
+          if (tipoValiditaFuori === "annuale") {
+            const dIn = dataInizioAnnuale.value;
+            const dFi = dataFineAnnuale.value;
+            if (!dIn || !dFi) { alert("Errore: inserire Data Inizio e Data Fine per il periodo annuale."); return; }
+            if (dIn > dFi) { alert("Errore: la Data Fine non può essere precedente alla Data Inizio."); return; }
+            stringaDettaglioValiditaFuori = `Annuale (Anno ref: ${annoAnnuale.value}) - Dal ${formatDateIT(dIn)} al ${formatDateIT(dFi)}`;
+          } else if (tipoValiditaFuori === "pluriennale") {
+            const mIn = meseInizioPluri.value;
+            const aFi = annoFinePluri.value;
+            if (!mIn || !aFi) { alert("Errore: selezionare il Mese di partenza e l'Anno di scadenza per il periodo pluriennale."); return; }
+            stringaDettaglioValiditaFuori = `Pluriennale - Partenza: ${mIn} ${getCurrentYear()} -> Scadenza Anno: ${aFi}`;
+          } else if (tipoValiditaFuori === "spot") {
+            const mScelto = meseSpot.value;
+            if (!mScelto) { alert("Errore: selezionare il Mese di liquidazione per l'intervento Spot."); return; }
+            stringaDettaglioValiditaFuori = `Una tantum / Spot - Mese liquidazione: ${mScelto} ${getCurrentYear()}`;
+          }
+
+          const cPdvF = selectedCustomer.codPdV || selectedCustomer.CodPdV || "";
+          const cRagF = selectedCustomer.ragioneSociale || selectedCustomer.RagioneSociale || "";
+          const cBuF = estraiCodiceRegion(selectedCustomer);
+          const cEmailRsmF = (selectedCustomer.emailResponsabileCommerciale || selectedCustomer.EmailResponsabileCommerciale || "").trim().toLowerCase();
+          const cVenF = selectedCustomer.venditore || selectedCustomer.Venditore || "N/D";
+          const gruppoSceltF = gruppoCliente.value;
+          const fornitoreOptF = selectFornitore.options[selectFornitore.selectedIndex];
+          const fornitoreSceltF = fornitoreOptF ? fornitoreOptF.textContent : "Non specificato";
+          const selectPercorsoEl = document.getElementById("selectPercorso");
+          const percorsoLabelF = selectPercorsoEl.options[selectPercorsoEl.selectedIndex].text;
+
+          const recipientsFuori = buildRecipients({
+            region: cBuF,
+            budgetMode: BUDGET_MODES.standard,
+            importoDaLiquidare: 0,
+            currentUserEmail: userEmail,
+            rsmEmail: cEmailRsmF,
+            percorso: percorsoSelezionato
+          });
+
+          if (!recipientsFuori.toRecipients.length) {
+            alert(`Errore: impossibile determinare il destinatario RSM per la Region ${cBuF || "non disponibile"}. Verificare l'anagrafica del cliente.`);
+            return;
+          }
+
+          log("Region rilevata: " + cBuF + " | Importo: " + valImportoFuori.toFixed(2) + " € | TO: " + recipientsFuori.toRecipients.join(", ") + " | CC: " + recipientsFuori.ccRecipients.join(", "));
+
+          const htmlBodyFuori = `
+            <html>
+              <body style="font-family: Calibri, sans-serif; font-size: 12px;">
+                <p>Richiesta di attivazione procedura RV <strong>[${percorsoLabelF}]</strong> per il seguente punto vendita:</p>
+                <table border="1" cellpadding="6" style="border-collapse: collapse; font-family: Calibri, sans-serif; font-size: 12px;">
+                  <tr style="background-color: #f2f2f2;"><td><b>Campo</b></td><td><b>Valore</b></td></tr>
+                  <tr style="background-color: #fff3e0;"><td>Percorso Richiesta</td><td><b>${percorsoLabelF}</b></td></tr>
+                  <tr><td>Codice PdV</td><td>${cPdvF}</td></tr>
+                  <tr><td>Ragione Sociale</td><td>${cRagF}</td></tr>
+                  <tr><td>Region</td><td>${cBuF}</td></tr>
+                  <tr><td>Gruppo</td><td><b>${gruppoSceltF}</b></td></tr>
+                  <tr><td>Fornitore Selezionato</td><td>${fornitoreSceltF}</td></tr>
+                  <tr><td>${labelImportoFuoriBinario.textContent}</td><td><b>${valImportoFuori.toFixed(2)} €</b></td></tr>
+                  <tr><td><b>Periodo Validità</b></td><td><span style="color:#d83b01;"><b>${stringaDettaglioValiditaFuori}</b></span></td></tr>
+                  <tr><td>Note / Descrizione Intervento</td><td>${txtNoteFuori}</td></tr>
+                  <tr style="background-color: #f9f9f9;"><td colspan="2"></td></tr>
+                  <tr><td>Venditore</td><td>${cVenF}</td></tr>
+                </table>
+              </body>
+            </html>
+          `;
+
+          const messageFormOptionsFuori = {
+            toRecipients: recipientsFuori.toRecipients,
+            ccRecipients: recipientsFuori.ccRecipients,
+            subject: `Region: ${cBuF} - Richiesta RV [verifica disponibilità reintegro] - ${cPdvF} - ${cRagF}`,
+            htmlBody: htmlBodyFuori
+          };
+
+          if (mode === "attach" && Office.context.mailbox.item && Office.context.mailbox.item.itemId) {
+            const originalSubjectF = (Office.context.mailbox.item.subject || "Messaggio originale").replace(/[\\/:*?"<>|]/g, "-");
+            messageFormOptionsFuori.attachments = [{
+              type: "item",
+              itemId: Office.context.mailbox.item.itemId,
+              name: originalSubjectF + " - Allegato procedura RV.eml"
+            }];
+          }
+
+          Office.context.mailbox.displayNewMessageForm(messageFormOptionsFuori);
+          log("Finestra email creata (percorso fuori binario).");
+          return;
+        }
+
+        // ─────────────────────────────────────────────────────────
+        // PERCORSO STANDARD (1) — validazione e invio
+        // ─────────────────────────────────────────────────────────
+        if (quantitaStima.required) {
+          const qVal = parseInt(quantitaStima.value, 10);
+          if (isNaN(qVal) || qVal <= 0 || !unitaMisura.value) {
+            alert("Errore: compilare Quantità Stima con un numero intero maggiore di 0 e selezionare l'Unità di Misura.");
+            return;
+          }
+        }
+
+        const budgetSelezionato = selectBudget.value;
+        if (!budgetSelezionato) {
+          alert("Errore: selezionare un Budget dal menu a tendina.");
+          return;
+        }
+
+        const budgetMode = getBudgetMode(budgetSelezionato);
+        const isMerceOmaggio = isMerceOmaggioMode(budgetMode);
+        const articoliOmaggio = [];
+
+        if (isMerceOmaggio) {
+          for (let i = 1; i <= 3; i++) {
+            const codice = document.getElementById(`codArticolo${i}`).value.trim();
+            const qtaRaw = document.getElementById(`qtaArticolo${i}`).value;
+            const quantita = qtaRaw === "" ? NaN : Number(qtaRaw);
+
+            if (i === 1 && (!codice || !Number.isInteger(quantita) || quantita <= 0)) {
+              alert("Errore: per MERCE OMAGGIO è obbligatorio compilare Cod. Articolo #1 e una Q.tà intera maggiore di 0.");
+              return;
+            }
+
+            if ((codice && (!Number.isInteger(quantita) || quantita <= 0)) || (!codice && qtaRaw !== "")) {
+              alert(`Errore: completare correttamente sia Cod. Articolo #${i} sia la relativa Q.tà.`);
+              return;
+            }
+
+            if (codice) {
+              articoliOmaggio.push({ codice, quantita });
+            }
+          }
+        }
+
+        if (budgetMode === BUDGET_MODES.merceOmaggioPartesa) {
+          if (selectFornitore.value !== PARTESA_SUPPLIER.code) {
+            alert("Errore: il budget MERCE OMAGGIO (Partesa) richiede il fornitore Partesa impostato automaticamente.");
+            return;
+          }
+        } else {
+          if (!selectFornitore.value) {
+            const resolvedTipologia = tryResolveTipologiaFromInput();
+            if (!resolvedTipologia) {
+              alert("Errore: la tipologia non è stata risolta automaticamente. Selezionare un Fornitore valido o una Tipologia dai suggerimenti.");
+              return;
+            }
+          }
+        }
+
+        if (budgetMode === BUDGET_MODES.merceOmaggioReintegrata && (!selectFornitore.value || selectFornitore.value === PARTESA_SUPPLIER.code)) {
+          alert("Errore: per MERCE OMAGGIO (reintegrata da fornitore) il Fornitore è obbligatorio e non può essere Partesa.");
+          return;
+        }
+
+        let tipologiaScelta = "Non applicabile";
+        if (!isMerceOmaggio) {
+          tipologiaScelta = selectFornitore.value ? selectTipologia.value.trim() : inputTipologia.value.trim();
+          const tipologiaValida = getTipologieFiltrate(selectFornitore.value).some(item =>
+            String(item.TipologiaIntervento || "").trim() === tipologiaScelta
+          );
+          if (!tipologiaScelta || !tipologiaValida) {
+            alert("Errore: selezionare una Tipologia Intervento valida coerente con il Fornitore scelto.");
+            return;
+          }
+        }
+
+        const tipoValidita = selectValidita.value;
+        if (!tipoValidita) {
+          alert("Errore: selezionare un Periodo Validità dal menu a tendina.");
+          return;
+        }
+
+        let stringaDettaglioValidita = "";
+        if (tipoValidita === "annuale") {
+          const dIn = dataInizioAnnuale.value;
+          const dFi = dataFineAnnuale.value;
+          if (!dIn || !dFi) {
+            alert("Errore: inserire Data Inizio e Data Fine per il periodo annuale.");
+            return;
+          }
+          if (dIn > dFi) {
+            alert("Errore: la Data Fine non può essere precedente alla Data Inizio.");
+            return;
+          }
+          stringaDettaglioValidita = `Annuale (Anno ref: ${annoAnnuale.value}) - Dal ${formatDateIT(dIn)} al ${formatDateIT(dFi)}`;
+        } else if (tipoValidita === "pluriennale") {
+          const mIn = meseInizioPluri.value;
+          const aFi = annoFinePluri.value;
+          if (!mIn || !aFi) {
+            alert("Errore: selezionare il Mese di partenza e l’Anno di scadenza per il periodo pluriennale.");
+            return;
+          }
+          stringaDettaglioValidita = `Pluriennale - Partenza: ${mIn} ${getCurrentYear()} -> Scadenza Anno: ${aFi}`;
+        } else if (tipoValidita === "spot") {
+          const mScelto = meseSpot.value;
+          if (!mScelto) {
+            alert("Errore: selezionare il Mese di liquidazione per l’intervento Spot.");
+            return;
+          }
+          stringaDettaglioValidita = `Una tantum / Spot - Mese liquidazione: ${mScelto} ${getCurrentYear()}`;
+        }
+
+        const tImporto = isMerceOmaggio ? "Non applicabile" : tipoImporto.value;
+        const valReintegrato = isMerceOmaggio ? 0 : parseFloat(importoReintegrato.value);
+        const valLiquidare = isMerceOmaggio ? 0 : parseFloat(importoLiquidare.value || "0");
+        const txtNote = noteIntervento.value.trim();
+
+        if (!isMerceOmaggio && (isNaN(valReintegrato) || valReintegrato <= 0)) {
+          alert("Errore: L'Importo Reintegrato deve essere compilato e maggiore di 0.");
+          return;
+        }
+        if (!isMerceOmaggio && (isNaN(valLiquidare) || valLiquidare < 0)) {
+          alert("Errore: l'Importo da Liquidare non può essere negativo.");
+          return;
+        }
+        if (tipoValidita === "pluriennale" && txtNote === "") {
+          alert("Errore: Per i contratti Pluriennali è obbligatorio specificare la ripartizione economica per anno nel campo Note.");
+          return;
+        }
+        if (!isMerceOmaggio && tImporto === "Variabile" && txtNote === "") {
+          alert("Errore: Il campo Note è obbligatorio quando il tipo di importo è Variabile.");
+          return;
+        }
+
+        let txtExtra = "Nessuno";
+        if (valLiquidare > valReintegrato) {
+          txtExtra = (valLiquidare - valReintegrato).toFixed(2) + " €";
+        }
+
+        const cPdv = selectedCustomer.codPdV || selectedCustomer.CodPdV || "";
+        const cRag = selectedCustomer.ragioneSociale || selectedCustomer.RagioneSociale || "";
+        const cBu = estraiCodiceRegion(selectedCustomer);
+        const cEmailRsm = (
+          selectedCustomer.emailResponsabileCommerciale ||
+          selectedCustomer.EmailResponsabileCommerciale ||
+          ""
+        ).trim().toLowerCase();
+
+        const recipients = buildRecipients({
+          region: cBu,
+          budgetMode,
+          importoDaLiquidare: valLiquidare,
+          currentUserEmail: userEmail,
+          rsmEmail: cEmailRsm,
+          percorso: percorsoSelezionato
+        });
+
+        if (isMerceOmaggio && !recipients.serviceRecipient) {
+          alert(`Errore: impossibile determinare la casella clienti/service per la Region ${cBu || "Region non disponibile"}. Verificare la configurazione del cliente.`);
+          return;
+        }
+
+        log("Region rilevata: " + cBu + " | TO: " + recipients.toRecipients.join(", ") + " | CC: " + recipients.ccRecipients.join(", "));
+
+        const cVen = selectedCustomer.venditore || selectedCustomer.Venditore || "N/D";
+        const qStimaText = quantitaStima.required ? quantitaStima.value : "Non richiesta";
+        const udmText = quantitaStima.required ? unitaMisura.value : "Non richiesta";
+        const gruppoScelto = gruppoCliente.value;
+        const fornitoreOpt = selectFornitore.options[selectFornitore.selectedIndex];
+        const fornitoreScelto = fornitoreOpt ? fornitoreOpt.textContent : "Non specificato";
+
+        const righeMerceOmaggio = isMerceOmaggio
+          ? `
+                <tr style="background-color: #eaf6ee;"><td colspan="2"><b>DETTAGLIO MERCE OMAGGIO</b></td></tr>
+                ${articoliOmaggio.map((articolo, index) => `
+                <tr><td>Cod. Articolo #${index + 1}</td><td>${articolo.codice}</td></tr>
+                <tr><td>Q.tà Articolo #${index + 1}</td><td>${articolo.quantita}</td></tr>`).join("")}
+            `
+          : "";
+
+        const htmlBody = `
+          <html>
+            <body style="font-family: Calibri, sans-serif; font-size: 12px;">
+              <p>Richiesta di attivazione procedura RV per il seguente punto vendita:</p>
+              <table border="1" cellpadding="6" style="border-collapse: collapse; font-family: Calibri, sans-serif; font-size: 12px;">
+                <tr style="background-color: #f2f2f2;"><td><b>Campo</b></td><td><b>Valore</b></td></tr>
+                <tr><td>Codice PdV</td><td>${cPdv}</td></tr>
+                <tr><td>Ragione Sociale</td><td>${cRag}</td></tr>
+                <tr><td>Region</td><td>${cBu}</td></tr>
+                <tr><td>Gruppo</td><td><b>${gruppoScelto}</b></td></tr>
+                <tr><td>Fornitore Selezionato</td><td>${fornitoreScelto}</td></tr>
+                <tr><td>Tipologia Intervento</td><td>${tipologiaScelta}</td></tr>
+                <tr><td>Budget</td><td>${budgetSelezionato}</td></tr>
+                <tr><td>Quantità Stima</td><td>${qStimaText}</td></tr>
+                <tr><td>Unità di Misura</td><td>${udmText}</td></tr>
+                ${righeMerceOmaggio}
+                <tr><td><b>Periodo Validità</b></td><td><span style="color:#d83b01;"><b>${stringaDettaglioValidita}</b></span></td></tr>
+                ${isMerceOmaggio ? "" : `
+                <tr style="background-color: #f9f9f9;"><td colspan="2"><b>DETTAGLI ECONOMICI</b></td></tr>
+                <tr><td>Tipo Importo</td><td>${tImporto}</td></tr>
+                <tr><td>Importo Reintegrato</td><td>${valReintegrato.toFixed(2)} €</td></tr>
+                <tr><td>Importo da Liquidare</td><td>${valLiquidare.toFixed(2)} €</td></tr>
+                <tr><td>Importo Extra Non Coperto</td><td><span style="color:#d83b01; font-weight:bold;">${txtExtra}</span></td></tr>`}
+                <tr><td>Note / Giustificativo Ripartizione</td><td>${txtNote ? txtNote : "Nessuna nota inserita"}</td></tr>
+                <tr style="background-color: #f9f9f9;"><td colspan="2"></td></tr>
+                <tr><td>Venditore</td><td>${cVen}</td></tr>
+              </table>
+            </body>
+          </html>
+        `;
+
+        const messageFormOptions = {
+          toRecipients: recipients.toRecipients,
+          ccRecipients: recipients.ccRecipients,
+          subject: `Region: ${cBu} - Richiesta RV - ${cPdv} - ${cRag}`,
+          htmlBody: htmlBody
+        };
+
+        if (mode === "attach" && Office.context.mailbox.item && Office.context.mailbox.item.itemId) {
+          const originalSubject = (Office.context.mailbox.item.subject || "Messaggio originale").replace(/[\\/:*?"<>|]/g, "-");
+          messageFormOptions.attachments = [{
+            type: "item",
+            itemId: Office.context.mailbox.item.itemId,
+            name: originalSubject + " - Allegato procedura RV.eml"
+          }];
+        }
+
+        Office.context.mailbox.displayNewMessageForm(messageFormOptions);
+        log("Finestra email creata.");
+      });
+    });
+  </script>
+</body>
+</html>
