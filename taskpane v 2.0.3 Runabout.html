@@ -114,7 +114,6 @@
     <h2>Richiesta Investimento</h2>
     <div id="statusMessage" class="status-message"></div>
 
-    <!-- 1. PERCORSO / BINARIO -->
     <div class="form-group" id="containerPercorso">
         <label for="selectPercorso">Tipo di Richiesta <span class="required">*</span></label>
         <select id="selectPercorso" onchange="aggiornaVisibilitaPercorso()">
@@ -125,7 +124,6 @@
         </select>
     </div>
 
-    <!-- 2. CLIENTE -->
     <div class="form-group" id="containerCliente">
         <label for="inputCliente">Cliente <span class="required">*</span></label>
         <div class="search-container">
@@ -134,7 +132,6 @@
         </div>
     </div>
 
-    <!-- 3. GRUPPO PDC -->
     <div class="form-group" id="containerGruppo">
         <label for="selectGruppo">Gruppo Cliente</label>
         <select id="selectGruppo">
@@ -144,7 +141,6 @@
         </select>
     </div>
 
-    <!-- 4. FORNITORE -->
     <div class="form-group" id="containerFornitore">
         <label for="inputFornitore">Fornitore <span class="required">*</span></label>
         <div class="search-container">
@@ -154,7 +150,6 @@
         <input type="hidden" id="selectFornitore">
     </div>
 
-    <!-- 5. BUDGET -->
     <div class="form-group" id="containerBudget">
         <label for="selectBudget">Budget / Capillare</label>
         <select id="selectBudget">
@@ -162,7 +157,6 @@
         </select>
     </div>
 
-    <!-- 6. TIPOLOGIA INVESTIMENTO -->
     <div class="form-group" id="containerTipologia">
         <label for="selectTipologia">Tipologia Investimento</label>
         <select id="selectTipologia">
@@ -170,7 +164,6 @@
         </select>
     </div>
 
-    <!-- 7. PERIODI DI VALIDITA -->
     <div class="form-group" id="containerValidita">
         <label for="inputDataInizio">Data Inizio Validità</label>
         <input type="date" id="inputDataInizio">
@@ -178,13 +171,11 @@
         <input type="date" id="inputDataFine">
     </div>
 
-    <!-- 8. SEZIONE ECONOMICA -->
     <div class="form-group" id="containerEconomica">
         <label for="inputImporto">Importo (€)</label>
         <input type="number" id="inputImporto" step="0.01" min="0.01" placeholder="0.00">
     </div>
 
-    <!-- 9. DETTAGLIO MERCE OMAGGIO (Attivo solo su Binario 3) -->
     <div class="form-group" id="containerOmaggio" style="display: none;">
         <label>Dettaglio Merce Omaggio <span class="required">*</span></label>
         <div id="grigliaOmaggioContainer">
@@ -202,7 +193,6 @@
         </div>
     </div>
 
-    <!-- 10. NOTE -->
     <div class="form-group" id="containerNote">
         <label for="inputNote">Note</label>
         <textarea id="inputNote" rows="3" placeholder="Note aggiuntive..."></textarea>
@@ -213,12 +203,10 @@
         <button type="button" id="resetBtn" onclick="resetForm()">Pulisci Form</button>
     </div>
 
-    <!-- FOOTER CON VERSIONING -->
     <div class="footer-version">
         Versione Add-in: <strong id="appVersion">v2.0.3</strong>
     </div>
 
-    <!-- SCRIPT LOGICO COMPLETO -->
     <script>
         const APP_VERSION = "v2.0.3";
         const BASE_DATA_URL = "https://giuseppeangelici-coder.github.io/outlook-addin-test";
@@ -232,6 +220,7 @@
         let masterDatabase = [];
         let filteredDatabase = [];
         let fornitoriDB = [];
+        let tipologieDB = [];
 
         let selectedCustomer = null;
         let selectedSupplier = null;
@@ -241,11 +230,7 @@
             const status = document.getElementById("statusMessage");
             status.textContent = message || "";
             status.className = "status-message" + (isError ? " error" : "");
-            if (!message) {
-                status.style.display = "none";
-            } else {
-                status.style.display = "block";
-            }
+            status.style.display = message ? "block" : "none";
         }
 
         Office.onReady(async (info) => {
@@ -254,7 +239,7 @@
             document.getElementById("appVersion").textContent = APP_VERSION;
 
             await inizializzaFlussoUtente();
-            await caricaAnagraficaFornitori();
+            await caricaAnagraficheFornitoriETipologie();
             setupEventListeners();
             window.aggiornaVisibilitaPercorso();
             validaForm();
@@ -273,7 +258,7 @@
                     return emailRSM === userEmail || emailRV === userEmail;
                 });
 
-                if (filteredDatabase.length === 0) {
+                if (!filteredDatabase.length) {
                     document.getElementById("inputCliente").disabled = true;
                     showStatus("Utente non autorizzato: nessun cliente associato al tuo profilo Office.", true);
                     return;
@@ -291,16 +276,23 @@
             }
         }
 
-        async function caricaAnagraficaFornitori() {
+        async function caricaAnagraficheFornitoriETipologie() {
             try {
-                const urlFornitori = `${BASE_DATA_URL}/FornitoriTipologie.json`;
-                const response = await fetch(urlFornitori, { cache: "no-store" });
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                fornitoriDB = await response.json();
+                const [fornitoriRes, tipologieRes] = await Promise.all([
+                    fetch(`${BASE_DATA_URL}/Fornitori.json`, { cache: "no-store" }),
+                    fetch(`${BASE_DATA_URL}/FornitoriTipologie.json`, { cache: "no-store" })
+                ]);
+
+                if (!fornitoriRes.ok) throw new Error(`HTTP ${fornitoriRes.status} su Fornitori.json`);
+                if (!tipologieRes.ok) throw new Error(`HTTP ${tipologieRes.status} su FornitoriTipologie.json`);
+
+                fornitoriDB = await fornitoriRes.json();
+                tipologieDB = await tipologieRes.json();
             } catch (error) {
-                console.error("Errore caricamento FornitoriTipologie.json:", error);
+                console.error("Errore caricamento anagrafiche fornitore/tipologie:", error);
                 fornitoriDB = [];
-                showStatus("Errore nel caricamento fornitori.", true);
+                tipologieDB = [];
+                showStatus("Errore nel caricamento fornitori/tipologie.", true);
             }
         }
 
@@ -324,8 +316,7 @@
                 }
             });
 
-            const submitBtn = document.getElementById("submitBtn");
-            submitBtn.addEventListener("click", () => {
+            document.getElementById("submitBtn").addEventListener("click", () => {
                 if (!validaForm()) {
                     showStatus("Compila tutti i campi obbligatori prima di generare la richiesta.", true);
                     return;
@@ -355,16 +346,11 @@
         function mostraSuggerimentiCliente(lista) {
             const suggestionsBox = document.getElementById("suggestionsCliente");
             suggestionsBox.innerHTML = "";
-
-            if (!lista.length) {
-                nascondiSuggerimenti("suggestionsCliente");
-                return;
-            }
+            if (!lista.length) return nascondiSuggerimenti("suggestionsCliente");
 
             lista.forEach(cliente => {
                 const codice = String(cliente.codPdV || cliente.CodPdV || "").trim();
                 const ragione = String(cliente.ragioneSociale || cliente.RagioneSociale || "").trim();
-
                 const li = document.createElement("li");
                 li.textContent = `${ragione} (${codice})`;
                 li.addEventListener("click", () => selezionaCliente(cliente));
@@ -376,7 +362,6 @@
 
         function selezionaCliente(cliente) {
             selectedCustomer = cliente;
-
             const codice = String(cliente.codPdV || cliente.CodPdV || "").trim();
             const ragione = String(cliente.ragioneSociale || cliente.RagioneSociale || "").trim();
             const region = String(cliente.codBU || cliente.CodBU || "").trim();
@@ -395,6 +380,7 @@
                 nascondiSuggerimenti("suggestionsFornitore");
                 selectedSupplier = null;
                 document.getElementById("selectFornitore").value = "";
+                popolaTipologiePerFornitore("");
                 validaForm();
                 return;
             }
@@ -416,11 +402,7 @@
         function mostraSuggerimentiFornitore(lista) {
             const suggestionsBox = document.getElementById("suggestionsFornitore");
             suggestionsBox.innerHTML = "";
-
-            if (!lista.length) {
-                nascondiSuggerimenti("suggestionsFornitore");
-                return;
-            }
+            if (!lista.length) return nascondiSuggerimenti("suggestionsFornitore");
 
             lista.forEach(f => {
                 const ragSoc = String(f.RagioneSocialeFornitore || f.RagSocFornitore || "").trim();
@@ -432,6 +414,27 @@
             });
 
             suggestionsBox.style.display = "block";
+        }
+
+        function popolaTipologiePerFornitore(codFornitore) {
+            const selectTipologia = document.getElementById("selectTipologia");
+            selectTipologia.innerHTML = '<option value="">-- Seleziona Tipologia --</option>';
+
+            if (!codFornitore) return;
+
+            const uniche = new Set();
+            tipologieDB.forEach(item => {
+                const cod = String(item.CodFornitore || "").trim();
+                const tip = String(item.TipologiaIntervento || "").trim();
+                if (cod === codFornitore && tip) uniche.add(tip);
+            });
+
+            [...uniche].forEach(tip => {
+                const opt = document.createElement("option");
+                opt.value = tip;
+                opt.textContent = tip;
+                selectTipologia.appendChild(opt);
+            });
         }
 
         function selezionaFornitore(fornitore) {
@@ -446,6 +449,7 @@
             document.getElementById("inputFornitore").value = `${ragSoc} (${cod})`;
             document.getElementById("selectFornitore").value = cod;
 
+            popolaTipologiePerFornitore(cod);
             nascondiSuggerimenti("suggestionsFornitore");
             validaForm();
         }
@@ -481,6 +485,7 @@
                 inputFornitore.disabled = true;
                 selectedSupplier = null;
                 document.getElementById("selectFornitore").value = "";
+                popolaTipologiePerFornitore("");
                 validaForm();
                 return;
             }
@@ -499,6 +504,7 @@
                     inputFornitore.value = "";
                     selectedSupplier = null;
                     document.getElementById("selectFornitore").value = "";
+                    popolaTipologiePerFornitore("");
                 }
             } else if (percorso === PERCORSO_RICHIESTA.partesa) {
                 containerGruppo.style.display = "block";
@@ -513,6 +519,7 @@
                 document.getElementById("selectFornitore").value = "";
                 inputFornitore.value = "";
                 inputFornitore.disabled = true;
+                popolaTipologiePerFornitore("");
             } else if (percorso === PERCORSO_RICHIESTA.omaggio) {
                 containerGruppo.style.display = "none";
                 containerFornitore.style.display = "block";
@@ -526,6 +533,7 @@
                 inputFornitore.disabled = true;
                 document.getElementById("selectFornitore").value = "PARTESA";
                 selectedSupplier = { CodFornitore: "PARTESA", RagSocFornitore: "PARTESA S.P.A." };
+                popolaTipologiePerFornitore("");
             }
 
             validaForm();
@@ -535,16 +543,8 @@
             const submitBtn = document.getElementById("submitBtn");
             const percorso = document.getElementById("selectPercorso").value;
 
-            if (!percorso) {
-                submitBtn.disabled = true;
-                return false;
-            }
-
-            const hasCliente = !!selectedCustomer;
-            if (!hasCliente) {
-                submitBtn.disabled = true;
-                return false;
-            }
+            if (!percorso) return (submitBtn.disabled = true, false);
+            if (!selectedCustomer) return (submitBtn.disabled = true, false);
 
             if (percorso === PERCORSO_RICHIESTA.fornitore && !selectedSupplier) {
                 submitBtn.disabled = true;
@@ -562,8 +562,8 @@
             const importo = Number(document.getElementById("inputImporto").value || 0);
             const dataInizio = document.getElementById("inputDataInizio").value;
             const dataFine = document.getElementById("inputDataFine").value;
-
             const isValid = importo > 0 && !!dataInizio && !!dataFine;
+
             submitBtn.disabled = !isValid;
             return isValid;
         }
@@ -588,6 +588,7 @@
 
             nascondiSuggerimenti("suggestionsCliente");
             nascondiSuggerimenti("suggestionsFornitore");
+            popolaTipologiePerFornitore("");
             showStatus("");
 
             window.aggiornaVisibilitaPercorso();
