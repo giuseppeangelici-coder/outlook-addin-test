@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Richiesta Investimento Commerciale v2.0.2</title>
+    <title>Richiesta Investimento Commerciale v2.0.3</title>
     <!-- Script di OfficeJS -->
     <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js" type="text/javascript"></script>
     
@@ -22,7 +22,11 @@
             font-weight: 600;
             margin-bottom: 5px;
         }
-        input[type="text"], select, textarea {
+        input[type="text"],
+        input[type="number"],
+        input[type="date"],
+        select,
+        textarea {
             width: 100%;
             padding: 8px;
             border: 1px solid #ccc;
@@ -58,6 +62,45 @@
         .required {
             color: #d9534f;
         }
+        .status-message {
+            display: none;
+            margin: 0 0 12px 0;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid transparent;
+            font-size: 0.92em;
+        }
+        .status-message.error {
+            display: block;
+            background: #fff4f4;
+            border-color: #f5c2c7;
+            color: #842029;
+        }
+        .button-row {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        button {
+            border: none;
+            border-radius: 4px;
+            padding: 9px 12px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        #submitBtn {
+            background: #0d6efd;
+            color: #fff;
+            flex: 1;
+        }
+        #submitBtn:disabled {
+            background: #8cb9ff;
+            cursor: not-allowed;
+        }
+        #resetBtn {
+            background: #e9ecef;
+            color: #333;
+        }
         .footer-version {
             margin-top: 30px;
             font-size: 0.8em;
@@ -69,6 +112,7 @@
 <body>
 
     <h2>Richiesta Investimento</h2>
+    <div id="statusMessage" class="status-message"></div>
 
     <!-- 1. PERCORSO / BINARIO -->
     <div class="form-group" id="containerPercorso">
@@ -85,7 +129,7 @@
     <div class="form-group" id="containerCliente">
         <label for="inputCliente">Cliente <span class="required">*</span></label>
         <div class="search-container">
-            <input type="text" id="inputCliente" placeholder="Cerca cliente per Codice o Ragione Sociale..." autocomplete="off">
+            <input type="text" id="inputCliente" placeholder="Cerca cliente per Codice o Ragione Sociale..." autocomplete="off" disabled>
             <ul id="suggestionsCliente" class="suggestions-list"></ul>
         </div>
     </div>
@@ -95,6 +139,8 @@
         <label for="selectGruppo">Gruppo Cliente</label>
         <select id="selectGruppo">
             <option value="">-- Seleziona Gruppo --</option>
+            <option value="No">No</option>
+            <option value="Si">Sì</option>
         </select>
     </div>
 
@@ -110,7 +156,7 @@
 
     <!-- 5. BUDGET -->
     <div class="form-group" id="containerBudget">
-        <label for="selectBudget">Budget / Capilare</label>
+        <label for="selectBudget">Budget / Capillare</label>
         <select id="selectBudget">
             <option value="">-- Seleziona Budget --</option>
         </select>
@@ -135,15 +181,24 @@
     <!-- 8. SEZIONE ECONOMICA -->
     <div class="form-group" id="containerEconomica">
         <label for="inputImporto">Importo (€)</label>
-        <input type="number" id="inputImporto" step="0.01" placeholder="0.00">
+        <input type="number" id="inputImporto" step="0.01" min="0.01" placeholder="0.00">
     </div>
 
     <!-- 9. DETTAGLIO MERCE OMAGGIO (Attivo solo su Binario 3) -->
     <div class="form-group" id="containerOmaggio" style="display: none;">
         <label>Dettaglio Merce Omaggio <span class="required">*</span></label>
         <div id="grigliaOmaggioContainer">
-            <p style="font-size: 0.9em; color: #555;">Inserire almeno un articolo omaggio.</p>
-            <!-- Qui è presente la struttura/tabella per l'inserimento dinamico degli articoli -->
+            <p style="font-size: 0.9em; color: #555; margin-top: 0;">Inserire almeno un articolo omaggio.</p>
+            <div style="display:grid;grid-template-columns:1fr 110px;gap:8px;align-items:end;">
+                <div>
+                    <label for="codArticolo1">Cod. Articolo #1 <span class="required">*</span></label>
+                    <input type="text" id="codArticolo1" placeholder="Codice articolo">
+                </div>
+                <div>
+                    <label for="qtaArticolo1">Q.tà <span class="required">*</span></label>
+                    <input type="number" id="qtaArticolo1" min="1" step="1" placeholder="Q.tà">
+                </div>
+            </div>
         </div>
     </div>
 
@@ -153,135 +208,206 @@
         <textarea id="inputNote" rows="3" placeholder="Note aggiuntive..."></textarea>
     </div>
 
+    <div class="button-row">
+        <button type="button" id="submitBtn" disabled>Genera Richiesta RV</button>
+        <button type="button" id="resetBtn" onclick="resetForm()">Pulisci Form</button>
+    </div>
+
     <!-- FOOTER CON VERSIONING -->
     <div class="footer-version">
-        Versione Add-in: <strong id="appVersion">v2.0.2</strong>
+        Versione Add-in: <strong id="appVersion">v2.0.3</strong>
     </div>
 
     <!-- SCRIPT LOGICO COMPLETO -->
     <script>
-        // --- COSTANTI E STATO GLOBALE ---
-        const APP_VERSION = "v2.0.2";
-        
+        const APP_VERSION = "v2.0.3";
+        const BASE_DATA_URL = "https://giuseppeangelici-coder.github.io/outlook-addin-test";
+
         const PERCORSO_RICHIESTA = {
             fornitore: "fornitore",
             partesa: "partesa",
             omaggio: "omaggio"
         };
 
-        let masterDatabase = [];      // Caricato da QryCustomerMaster.json
-        let filteredDatabase = [];    // Filtrato per email dell'utente loggato
-        let fornitoriDB = [];         // Caricato da Fornitori.json
-        
+        let masterDatabase = [];
+        let filteredDatabase = [];
+        let fornitoriDB = [];
+
         let selectedCustomer = null;
-        let selectedSupplier = null;  // { CodFornitore: "...", RagSocFornitore: "..." }
-        let userRegion = "";          // Derivato da filteredDatabase[0].codBU
+        let selectedSupplier = null;
+        let userRegion = "";
 
-        // --- INIZIALIZZAZIONE OFFICE ---
-        Office.onReady(async (info) => {
-            if (info.host === Office.HostType.Outlook) {
-                document.getElementById("appVersion").textContent = APP_VERSION;
-                
-                // 1. Carica i dati del cliente e identifica l'utente
-                await inizializzaFlussoUtente();
-                
-                // 2. Carica l'anagrafica fornitori globale
-                await caricaAnagraficaFornitori();
-
-                // 3. Imposta eventi di input
-                setupEventListeners();
-
-                // 4. Inizializza visibilità form
-                window.aggiornaVisibilitaPercorso();
+        function showStatus(message, isError = false) {
+            const status = document.getElementById("statusMessage");
+            status.textContent = message || "";
+            status.className = "status-message" + (isError ? " error" : "");
+            if (!message) {
+                status.style.display = "none";
+            } else {
+                status.style.display = "block";
             }
+        }
+
+        Office.onReady(async (info) => {
+            if (info.host !== Office.HostType.Outlook) return;
+
+            document.getElementById("appVersion").textContent = APP_VERSION;
+
+            await inizializzaFlussoUtente();
+            await caricaAnagraficaFornitori();
+            setupEventListeners();
+            window.aggiornaVisibilitaPercorso();
+            validaForm();
         });
 
-        // --- CARICAMENTO ED ESTRAZIONE REGION ---
         async function inizializzaFlussoUtente() {
             try {
-                const userEmail = Office.context.mailbox.userProfile.emailAddress.toLowerCase();
-                
-                // Chiamata al JSON dei clienti (adatta il path se necessario)
-                const response = await fetch("QryCustomerMaster.json");
+                const userEmail = String(Office?.context?.mailbox?.userProfile?.emailAddress || "").toLowerCase().trim();
+                const response = await fetch(`${BASE_DATA_URL}/QryCustomerMaster.json`, { cache: "no-store" });
+                if (!response.ok) throw new Error(`HTTP ${response.status} su QryCustomerMaster.json`);
                 masterDatabase = await response.json();
 
-                // Filtra i clienti associati all'email dell'utente
-                filteredDatabase = masterDatabase.filter(c => 
-                    c.EmailRSM && c.EmailRSM.toLowerCase() === userEmail
-                );
+                filteredDatabase = masterDatabase.filter(c => {
+                    const emailRSM = String(c.EmailRSM || c.emailRSM || c.emailResponsabileCommerciale || "").toLowerCase().trim();
+                    const emailRV = String(c.emailResponsabileVendite || c.EmailResponsabileVendite || "").toLowerCase().trim();
+                    return emailRSM === userEmail || emailRV === userEmail;
+                });
 
                 if (filteredDatabase.length === 0) {
-                    // Fallback di sicurezza per ambiente test
-                    filteredDatabase = masterDatabase; 
+                    document.getElementById("inputCliente").disabled = true;
+                    showStatus("Utente non autorizzato: nessun cliente associato al tuo profilo Office.", true);
+                    return;
                 }
 
-                // ESTRAZIONE USER REGION (codBU del primo cliente reperito)
-                if (filteredDatabase.length > 0 && filteredDatabase[0].codBU) {
-                    userRegion = filteredDatabase[0].codBU.toString().trim();
-                    console.log(`[RLS] Region identificata per l'utente (${userEmail}): ${userRegion}`);
-                } else {
-                    console.warn("[RLS] Impossibile determinare la Region dell'utente.");
-                }
+                document.getElementById("inputCliente").disabled = false;
+                showStatus("");
 
+                const first = filteredDatabase[0] || {};
+                userRegion = String(first.codBU || first.CodBU || "").trim();
             } catch (error) {
-                console.error("Errore nell'inizializzazione dei dati utente:", error);
+                console.error("Errore inizializzazione dati utente:", error);
+                document.getElementById("inputCliente").disabled = true;
+                showStatus("Errore nel caricamento dell'anagrafica clienti.", true);
             }
         }
 
         async function caricaAnagraficaFornitori() {
             try {
-                // Sostituire con l'URL RAW definitivo di GitHub
-                const urlFornitori = "https://raw.githubusercontent.com/IL_TUO_UTENTE/TUA_REPO/main/Fornitori.json"; 
-                
-                const response = await fetch(urlFornitori);
-                if (!response.ok) throw new Error(`HTTP Status ${response.status}`);
-                
+                const urlFornitori = `${BASE_DATA_URL}/FornitoriTipologie.json`;
+                const response = await fetch(urlFornitori, { cache: "no-store" });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 fornitoriDB = await response.json();
-                console.log(`Caricati ${fornitoriDB.length} fornitori da GitHub.`);
             } catch (error) {
-                console.error("Errore caricamento Fornitori.json, carico fallback locale se presente:", error);
+                console.error("Errore caricamento FornitoriTipologie.json:", error);
+                fornitoriDB = [];
+                showStatus("Errore nel caricamento fornitori.", true);
             }
         }
 
-        // --- GESTIONE EVENTI INPUT ---
         function setupEventListeners() {
-            // Event listener Autocomplete Fornitore
+            const inputCliente = document.getElementById("inputCliente");
             const inputFornitore = document.getElementById("inputFornitore");
-            if (inputFornitore) {
-                inputFornitore.addEventListener("input", gestisciInputFornitore);
-            }
 
-            // Chiusura dei menu a tendina se si clicca fuori
-            document.addEventListener("click", function(e) {
+            if (inputCliente) inputCliente.addEventListener("input", gestisciInputCliente);
+            if (inputFornitore) inputFornitore.addEventListener("input", gestisciInputFornitore);
+
+            ["selectGruppo", "selectBudget", "selectTipologia", "inputDataInizio", "inputDataFine", "inputImporto", "inputNote", "selectPercorso", "codArticolo1", "qtaArticolo1"].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener("input", validaForm);
+                if (el && el.tagName === "SELECT") el.addEventListener("change", validaForm);
+            });
+
+            document.addEventListener("click", function (e) {
                 if (!e.target.closest('.search-container')) {
                     nascondiSuggerimenti("suggestionsFornitore");
                     nascondiSuggerimenti("suggestionsCliente");
                 }
             });
+
+            const submitBtn = document.getElementById("submitBtn");
+            submitBtn.addEventListener("click", () => {
+                if (!validaForm()) {
+                    showStatus("Compila tutti i campi obbligatori prima di generare la richiesta.", true);
+                    return;
+                }
+                showStatus("Validazione OK. Richiesta pronta per l'invio.");
+            });
         }
 
-        // --- AUTOCOMPLETE FORNITORE (FUZZY SEARCH + FILTRO REGION) ---
-        function gestisciInputFornitore(e) {
+        function gestisciInputCliente(e) {
             const query = e.target.value.trim().toLowerCase();
-            const suggestionsBox = document.getElementById("suggestionsFornitore");
-
             if (query.length < 2) {
-                nascondiSuggerimenti("suggestionsFornitore");
+                nascondiSuggerimenti("suggestionsCliente");
+                selectedCustomer = null;
+                validaForm();
                 return;
             }
 
-            // Filtro contestuale: Region utente (o "ALL") AND match del testo
+            const risultati = filteredDatabase.filter(c => {
+                const codice = String(c.codPdV || c.CodPdV || "").toLowerCase();
+                const ragione = String(c.ragioneSociale || c.RagioneSociale || "").toLowerCase();
+                return codice.includes(query) || ragione.includes(query);
+            }).slice(0, 10);
+
+            mostraSuggerimentiCliente(risultati);
+        }
+
+        function mostraSuggerimentiCliente(lista) {
+            const suggestionsBox = document.getElementById("suggestionsCliente");
+            suggestionsBox.innerHTML = "";
+
+            if (!lista.length) {
+                nascondiSuggerimenti("suggestionsCliente");
+                return;
+            }
+
+            lista.forEach(cliente => {
+                const codice = String(cliente.codPdV || cliente.CodPdV || "").trim();
+                const ragione = String(cliente.ragioneSociale || cliente.RagioneSociale || "").trim();
+
+                const li = document.createElement("li");
+                li.textContent = `${ragione} (${codice})`;
+                li.addEventListener("click", () => selezionaCliente(cliente));
+                suggestionsBox.appendChild(li);
+            });
+
+            suggestionsBox.style.display = "block";
+        }
+
+        function selezionaCliente(cliente) {
+            selectedCustomer = cliente;
+
+            const codice = String(cliente.codPdV || cliente.CodPdV || "").trim();
+            const ragione = String(cliente.ragioneSociale || cliente.RagioneSociale || "").trim();
+            const region = String(cliente.codBU || cliente.CodBU || "").trim();
+
+            document.getElementById("inputCliente").value = `${ragione} (${codice})`;
+            userRegion = region || userRegion;
+
+            nascondiSuggerimenti("suggestionsCliente");
+            validaForm();
+        }
+
+        function gestisciInputFornitore(e) {
+            const query = e.target.value.trim().toLowerCase();
+
+            if (query.length < 2) {
+                nascondiSuggerimenti("suggestionsFornitore");
+                selectedSupplier = null;
+                document.getElementById("selectFornitore").value = "";
+                validaForm();
+                return;
+            }
+
             const risultati = fornitoriDB.filter(f => {
-                const regFornitore = (f.Region || "").toString().toUpperCase();
-                const regUtente = (userRegion || "").toString().toUpperCase();
+                const regFornitore = String(f.Region || "").toUpperCase();
+                const regUtente = String(userRegion || "").toUpperCase();
+                const appartieneAllaRegion = !regUtente || regFornitore === regUtente || regFornitore === "ALL";
 
-                const appartieneAllaRegion = (regFornitore === regUtente || regFornitore === "ALL");
-                
-                const corrispondeTesto = 
-                    (f.RagSocFornitore && f.RagSocFornitore.toLowerCase().includes(query)) ||
-                    (f.CodFornitore && f.CodFornitore.toLowerCase().includes(query));
+                const ragSoc = String(f.RagioneSocialeFornitore || f.RagSocFornitore || "").toLowerCase();
+                const cod = String(f.CodFornitore || "").toLowerCase();
 
-                return appartieneAllaRegion && corrispondeTesto;
+                return appartieneAllaRegion && (ragSoc.includes(query) || cod.includes(query));
             }).slice(0, 10);
 
             mostraSuggerimentiFornitore(risultati);
@@ -291,14 +417,16 @@
             const suggestionsBox = document.getElementById("suggestionsFornitore");
             suggestionsBox.innerHTML = "";
 
-            if (lista.length === 0) {
+            if (!lista.length) {
                 nascondiSuggerimenti("suggestionsFornitore");
                 return;
             }
 
             lista.forEach(f => {
+                const ragSoc = String(f.RagioneSocialeFornitore || f.RagSocFornitore || "").trim();
+                const cod = String(f.CodFornitore || "").trim();
                 const li = document.createElement("li");
-                li.textContent = `${f.RagSocFornitore} (${f.CodFornitore})`;
+                li.textContent = `${ragSoc} (${cod})`;
                 li.addEventListener("click", () => selezionaFornitore(f));
                 suggestionsBox.appendChild(li);
             });
@@ -307,31 +435,31 @@
         }
 
         function selezionaFornitore(fornitore) {
+            const ragSoc = String(fornitore.RagioneSocialeFornitore || fornitore.RagSocFornitore || "").trim();
+            const cod = String(fornitore.CodFornitore || "").trim();
+
             selectedSupplier = {
-                CodFornitore: fornitore.CodFornitore,
-                RagSocFornitore: f.RagSocFornitore
+                CodFornitore: cod,
+                RagSocFornitore: ragSoc
             };
 
-            document.getElementById("inputFornitore").value = `${fornitore.RagSocFornitore} (${fornitore.CodFornitore})`;
-            document.getElementById("selectFornitore").value = fornitore.CodFornitore;
-            
+            document.getElementById("inputFornitore").value = `${ragSoc} (${cod})`;
+            document.getElementById("selectFornitore").value = cod;
+
             nascondiSuggerimenti("suggestionsFornitore");
             validaForm();
         }
 
         function nascondiSuggerimenti(elementId) {
             const box = document.getElementById(elementId);
-            if (box) {
-                box.innerHTML = "";
-                box.style.display = "none";
-            }
+            if (!box) return;
+            box.innerHTML = "";
+            box.style.display = "none";
         }
 
-        // --- GESTIONE DELLA VISIBILITA DEI PERCORSI (3 BINARI) ---
-        window.aggiornaVisibilitaPercorso = function() {
+        window.aggiornaVisibilitaPercorso = function () {
             const percorso = document.getElementById("selectPercorso").value;
 
-            // Riferimenti ai wrapper HTML
             const containerGruppo = document.getElementById("containerGruppo");
             const containerFornitore = document.getElementById("containerFornitore");
             const containerBudget = document.getElementById("containerBudget");
@@ -339,102 +467,131 @@
             const containerValidita = document.getElementById("containerValidita");
             const containerEconomica = document.getElementById("containerEconomica");
             const containerOmaggio = document.getElementById("containerOmaggio");
-
             const inputFornitore = document.getElementById("inputFornitore");
 
-            if (percorso === PERCORSO_RICHIESTA.fornitore) {
-                // BINARIO 1: Investimento coperto da fornitore
-                if (containerGruppo) containerGruppo.style.display = "block";
-                if (containerFornitore) containerFornitore.style.display = "block";
-                if (containerBudget) containerBudget.style.display = "block";
-                if (containerTipologia) containerTipologia.style.display = "block";
-                if (containerValidita) containerValidita.style.display = "block";
-                if (containerEconomica) containerEconomica.style.display = "block";
-                if (containerOmaggio) containerOmaggio.style.display = "none";
-
-                if (inputFornitore) {
-                    inputFornitore.disabled = false;
-                    if (selectedSupplier && selectedSupplier.CodFornitore !== "PARTESA") {
-                        inputFornitore.value = `${selectedSupplier.RagSocFornitore} (${selectedSupplier.CodFornitore})`;
-                    } else {
-                        inputFornitore.value = "";
-                        selectedSupplier = null;
-                        document.getElementById("selectFornitore").value = "";
-                    }
-                }
-
-            } else if (percorso === PERCORSO_RICHIESTA.partesa) {
-                // BINARIO 2: Investimento a carico Partesa
-                if (containerGruppo) containerGruppo.style.display = "block";
-                if (containerFornitore) containerFornitore.style.display = "none";
-                if (containerBudget) containerBudget.style.display = "block";
-                if (containerTipologia) containerTipologia.style.display = "block";
-                if (containerValidita) containerValidita.style.display = "block";
-                if (containerEconomica) containerEconomica.style.display = "block";
-                if (containerOmaggio) containerOmaggio.style.display = "none";
-
-                // Pulisce selezione fornitore
+            if (!percorso) {
+                containerGruppo.style.display = "none";
+                containerFornitore.style.display = "none";
+                containerBudget.style.display = "none";
+                containerTipologia.style.display = "none";
+                containerValidita.style.display = "none";
+                containerEconomica.style.display = "none";
+                containerOmaggio.style.display = "none";
+                inputFornitore.value = "";
+                inputFornitore.disabled = true;
                 selectedSupplier = null;
                 document.getElementById("selectFornitore").value = "";
+                validaForm();
+                return;
+            }
 
-            } else if (percorso === PERCORSO_RICHIESTA.omaggio) {
-                // BINARIO 3: Merce omaggio
-                if (containerGruppo) containerGruppo.style.display = "none";
-                if (containerFornitore) containerFornitore.style.display = "block";
-                if (containerBudget) containerBudget.style.display = "none";
-                if (containerTipologia) containerTipologia.style.display = "none";
-                if (containerValidita) containerValidita.style.display = "none";
-                if (containerEconomica) containerEconomica.style.display = "none";
-                if (containerOmaggio) containerOmaggio.style.display = "block";
+            if (percorso === PERCORSO_RICHIESTA.fornitore) {
+                containerGruppo.style.display = "block";
+                containerFornitore.style.display = "block";
+                containerBudget.style.display = "block";
+                containerTipologia.style.display = "block";
+                containerValidita.style.display = "block";
+                containerEconomica.style.display = "block";
+                containerOmaggio.style.display = "none";
+                inputFornitore.disabled = !selectedCustomer;
 
-                // Default Fornitore = PARTESA S.P.A. (bloccato)
-                if (inputFornitore) {
-                    inputFornitore.value = "PARTESA S.P.A. (PARTESA)";
-                    inputFornitore.disabled = true;
+                if (!selectedCustomer) {
+                    inputFornitore.value = "";
+                    selectedSupplier = null;
+                    document.getElementById("selectFornitore").value = "";
                 }
+            } else if (percorso === PERCORSO_RICHIESTA.partesa) {
+                containerGruppo.style.display = "block";
+                containerFornitore.style.display = "none";
+                containerBudget.style.display = "block";
+                containerTipologia.style.display = "block";
+                containerValidita.style.display = "block";
+                containerEconomica.style.display = "block";
+                containerOmaggio.style.display = "none";
+
+                selectedSupplier = null;
+                document.getElementById("selectFornitore").value = "";
+                inputFornitore.value = "";
+                inputFornitore.disabled = true;
+            } else if (percorso === PERCORSO_RICHIESTA.omaggio) {
+                containerGruppo.style.display = "none";
+                containerFornitore.style.display = "block";
+                containerBudget.style.display = "none";
+                containerTipologia.style.display = "none";
+                containerValidita.style.display = "none";
+                containerEconomica.style.display = "none";
+                containerOmaggio.style.display = "block";
+
+                inputFornitore.value = "PARTESA S.P.A. (PARTESA)";
+                inputFornitore.disabled = true;
                 document.getElementById("selectFornitore").value = "PARTESA";
                 selectedSupplier = { CodFornitore: "PARTESA", RagSocFornitore: "PARTESA S.P.A." };
-
-            } else {
-                // Default di sicurezza (Nessun percorso selezionato)
-                if (containerGruppo) containerGruppo.style.display = "block";
-                if (containerFornitore) containerFornitore.style.display = "block";
-                if (containerBudget) containerBudget.style.display = "block";
-                if (containerTipologia) containerTipologia.style.display = "block";
-                if (containerValidita) containerValidita.style.display = "block";
-                if (containerEconomica) containerEconomica.style.display = "block";
-                if (containerOmaggio) containerOmaggio.style.display = "none";
-
-                if (inputFornitore) {
-                    inputFornitore.value = "";
-                    inputFornitore.disabled = true;
-                }
             }
 
             validaForm();
         };
 
-        // --- REVISIONATO E RESO RESILIENTE ---
         function validaForm() {
-            // Esegue i controlli formali necessari prima dell'abilitazione dei comandi
+            const submitBtn = document.getElementById("submitBtn");
             const percorso = document.getElementById("selectPercorso").value;
-            if (!percorso) return false;
 
-            // Altri controlli formali specifici per binario...
-            return true;
+            if (!percorso) {
+                submitBtn.disabled = true;
+                return false;
+            }
+
+            const hasCliente = !!selectedCustomer;
+            if (!hasCliente) {
+                submitBtn.disabled = true;
+                return false;
+            }
+
+            if (percorso === PERCORSO_RICHIESTA.fornitore && !selectedSupplier) {
+                submitBtn.disabled = true;
+                return false;
+            }
+
+            if (percorso === PERCORSO_RICHIESTA.omaggio) {
+                const codArticolo1 = String(document.getElementById("codArticolo1").value || "").trim();
+                const qtaArticolo1 = Number(document.getElementById("qtaArticolo1").value || 0);
+                const okOmaggio = codArticolo1.length > 0 && qtaArticolo1 > 0;
+                submitBtn.disabled = !okOmaggio;
+                return okOmaggio;
+            }
+
+            const importo = Number(document.getElementById("inputImporto").value || 0);
+            const dataInizio = document.getElementById("inputDataInizio").value;
+            const dataFine = document.getElementById("inputDataFine").value;
+
+            const isValid = importo > 0 && !!dataInizio && !!dataFine;
+            submitBtn.disabled = !isValid;
+            return isValid;
         }
 
         function resetForm() {
             document.getElementById("selectPercorso").value = "";
             document.getElementById("inputCliente").value = "";
+            document.getElementById("selectGruppo").value = "";
             document.getElementById("inputFornitore").value = "";
             document.getElementById("selectFornitore").value = "";
+            document.getElementById("selectBudget").value = "";
+            document.getElementById("selectTipologia").value = "";
+            document.getElementById("inputDataInizio").value = "";
+            document.getElementById("inputDataFine").value = "";
+            document.getElementById("inputImporto").value = "";
             document.getElementById("inputNote").value = "";
-            
+            document.getElementById("codArticolo1").value = "";
+            document.getElementById("qtaArticolo1").value = "";
+
             selectedCustomer = null;
             selectedSupplier = null;
 
+            nascondiSuggerimenti("suggestionsCliente");
+            nascondiSuggerimenti("suggestionsFornitore");
+            showStatus("");
+
             window.aggiornaVisibilitaPercorso();
+            validaForm();
         }
     </script>
 </body>
