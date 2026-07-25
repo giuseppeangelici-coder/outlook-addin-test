@@ -1,12 +1,27 @@
 <!-- 
   ADD-IN RICHIESTE RV - TASKPANE COMPONENT
-  Version: 2.0.1 - Roundtrip
-  Date: 2026-07-23
-  Changes: 
-    - Intestazione pulita (rimosse info modalita/utente/host in alto).
-    - Versione spostata nel footer in calce al modulo.
-    - Corretto bug visibilita e azzeramento campi importo nei percorsi fuori binario.
-    - Funzione resetForm() riallineata sugli ID corretti del DOM.
+  Version: 2.1.0 - Fase A (revisione pre-refactor)
+  Date: 2026-07-25
+  Changes:
+    - FIX: nel percorso standard l'email poteva essere aperta senza destinatario "A" se il
+      cliente non aveva un RSM valorizzato in anagrafica (mancava un controllo presente invece
+      nel percorso fuori binario). Ora bloccato con messaggio esplicito in entrambi i casi.
+    - FIX: estraiFornitoriAbilitati() non concede piu' "tutti i fornitori" (*) come fallback
+      silenzioso su dati malformati in Budget.json; ora nega l'accesso e segnala in console.
+    - FIX: estraiCodiceRegion() segnala sempre in console (non solo in DEBUG_MODE) quando la
+      region del cliente non e' tra quelle riconosciute, invece di propagarla in silenzio.
+    - RIMOSSO: percorso "Richiesta verifica disponibilita' reintegro" (soppresso per scelta
+      di prodotto, il relativo scenario esula dal perimetro del modulo).
+    - REFACTOR: estratte le funzioni condivise validaEDescriviPeriodoValidita() ed
+      estraiDatiClienteCorrente(), eliminando la duplicazione tra i due rami di submit
+      (standard / fuori binario) per la validazione del periodo di validita' e l'estrazione
+      dei dati del cliente selezionato.
+    - FIX: l'oggetto dell'email del percorso fuori binario citava ancora la dicitura del
+      percorso soppresso; ora usa l'etichetta del percorso realmente selezionato.
+  Changelog precedente:
+    - v2.0.1: Intestazione pulita (rimosse info modalita/utente/host in alto). Versione
+      spostata nel footer. Corretto bug visibilita e azzeramento campi importo nei percorsi
+      fuori binario. Funzione resetForm() riallineata sugli ID corretti del DOM.
 -->
 <!DOCTYPE html>
 <html>
@@ -86,7 +101,6 @@
   <select id="selectPercorso" disabled>
     <option value="">-- Scegli cosa vuoi fare --</option>
     <option value="standard">Investimento coperto da reintegro</option>
-    <option value="fuori_binario_verifica">Richiesta verifica disponibilità reintegro</option>
     <option value="fuori_binario_senza_reintegro">Richiesta approvazione investimento senza reintegro</option>
   </select>
   <div id="percorsoGuida" class="percorso-guida"></div>
@@ -286,18 +300,17 @@
   <div id="log">Log eventi...</div>
 
   <footer class="app-footer">
-    <span>Versione: v2.0.0 Roundtrip</span>
+    <span>Versione: v2.1.0 - Fase A</span>
   </footer>
 
   <script>
-    const APP_VERSION = "Versione: v2.0.0 Roundtrip";
+    const APP_VERSION = "Versione: v2.1.0 - Fase A";
     const POWER_AUTOMATE_URL = "https://default66e853deece344dd9d66ee6bdf4159.d4.environment.api.powerplatform.com/powerautomate/automations/direct/workflows/465577c70a414425a1f278e3c3f2bb43/triggers/manual/paths/invoke?api-version=1";
 
     const DEBUG_MODE = false;
 
     const PERCORSO_RICHIESTA = {
       standard: "standard",
-      fuoriBinarioVerifica: "fuori_binario_verifica",
       fuoriBinarioSenzaReintegro: "fuori_binario_senza_reintegro"
     };
 
@@ -306,7 +319,6 @@
     ];
 
     const IMPORTO_FUORI_BINARIO_LABELS = {
-      [PERCORSO_RICHIESTA.fuoriBinarioVerifica]: "Importo per il quale si chiede conferma di disponibilità reintegro (€)",
       [PERCORSO_RICHIESTA.fuoriBinarioSenzaReintegro]: "Importo da liquidare al cliente (€)"
     };
 
@@ -316,6 +328,7 @@
     const TIPOLOGIA_PLACEHOLDER_OPTION = "-- Seleziona Tipologia valida --";
     const EMAIL_ADDRESS_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const DAYS_IN_MONTH_BASE = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    const REGIONI_VALIDE = ["6716", "6771", "6734", "6724", "6772", "6765", "6770", "6760"];
     const PARTESA_SUPPLIER = {
       code: SPECIAL_PARTESA_CODE,
       label: "Partesa"
@@ -490,8 +503,15 @@
         customer.bu ?? customer.BU ?? "";
 
       const testo = String(valoreRegion).trim();
-      const matchCodice = testo.match(/\b(6716|6771|6734|6724|6772|6765|6770|6760)\b/);
-      return matchCodice ? matchCodice[1] : testo;
+      const matchCodice = testo.match(new RegExp(`\\b(${REGIONI_VALIDE.join("|")})\\b`));
+      if (matchCodice) return matchCodice[1];
+
+      // Region non riconosciuta: si restituisce comunque il testo grezzo (serve per mostrarlo
+      // nell'email e non bloccare inutilmente), ma si segnala sempre in console (non solo in
+      // DEBUG_MODE) perché i lookup destinatari a valle (CC Portfolio, Merce Omaggio) su questo
+      // codice falliranno silenziosamente se non intercettati qui.
+      console.warn(`Region non riconosciuta per il cliente selezionato: "${testo}". Verificare l'anagrafica QryCustomerMaster o aggiornare REGIONI_VALIDE.`);
+      return testo;
     }
 
     function resolveRecipientRegion(region, currentUserEmail) {
@@ -539,15 +559,6 @@
       }
 
       const portfolioCc = PORTFOLIO_CC_RECIPIENTS[effectiveRegion] || [];
-
-      if (percorso === PERCORSO_RICHIESTA.fuoriBinarioVerifica) {
-        return {
-          toRecipients: rsmEmail ? [rsmEmail] : [],
-          ccRecipients: [...portfolioCc],
-          effectiveRegion,
-          serviceRecipient: ""
-        };
-      }
 
       if (percorso === PERCORSO_RICHIESTA.fuoriBinarioSenzaReintegro) {
         const ccSet = new Set([...FINANCE_CC_RECIPIENTS, ...portfolioCc]);
@@ -670,7 +681,12 @@
           }
         }
       }
-      return "*";
+
+      // Fallback sicuro: un valore non riconosciuto (non "*", non array, non lista valida)
+      // NON deve concedere il budget a tutti i fornitori per errore di dati.
+      // Si nega l'accesso (nessun fornitore ammesso) e si segnala in console per farlo emergere.
+      console.warn("Budget.json: campo FornitoriAbilitati non riconosciuto, trattato come 'nessun fornitore ammesso':", rawInput);
+      return [];
     }
 
     function rinfrescaBudgetDisponibili(codFornitoreSelezionato = "") {
@@ -797,7 +813,7 @@
 
       function aggiornaModalitaTipologia() {
         const percorsoAttuale = document.getElementById("selectPercorso").value;
-        if (percorsoAttuale === PERCORSO_RICHIESTA.fuoriBinarioVerifica || percorsoAttuale === PERCORSO_RICHIESTA.fuoriBinarioSenzaReintegro) {
+        if (percorsoAttuale === PERCORSO_RICHIESTA.fuoriBinarioSenzaReintegro) {
           tipologiaLabel.style.display = "none";
           tipologiaSearchContainer.style.display = "none";
           selectTipologia.style.display = "none";
@@ -1044,7 +1060,6 @@
         const guidaEl = document.getElementById("percorsoGuida");
         const testi = {
           [PERCORSO_RICHIESTA.standard]: "✅ Seleziona budget, fornitore e tipologia. Email inviata all'RSM e al Portfolio/Supporto della region.",
-          [PERCORSO_RICHIESTA.fuoriBinarioVerifica]: "🔍 Verifica copertura: indica il fornitore, l'importo e descrivi l'intervento nelle note. Email inviata all'RSM e al Portfolio per verifica.",
           [PERCORSO_RICHIESTA.fuoriBinarioSenzaReintegro]: "⚠️ Investimento senza reintegro: indica il fornitore, l'importo e descrivi l'intervento nelle note. Email inviata all'RSM, a Finance e al Portfolio per conoscenza."
         };
         guidaEl.textContent = testi[percorso] || "";
@@ -1055,7 +1070,7 @@
       window.aggiornaVisibilitaPercorso = function() {
         const percorso = document.getElementById("selectPercorso").value;
         const isStandard = !percorso || percorso === PERCORSO_RICHIESTA.standard;
-        const isFuoriBinario = percorso === PERCORSO_RICHIESTA.fuoriBinarioVerifica || percorso === PERCORSO_RICHIESTA.fuoriBinarioSenzaReintegro;
+        const isFuoriBinario = percorso === PERCORSO_RICHIESTA.fuoriBinarioSenzaReintegro;
         const hasCustomer = !!selectedCustomer;
 
         aggiornaPercorsoGuida(percorso);
@@ -1113,9 +1128,7 @@
         const reqNote = document.getElementById("reqNote");
         if (isFuoriBinario) {
           reqNote.style.display = "inline";
-          noteIntervento.placeholder = percorso === PERCORSO_RICHIESTA.fuoriBinarioVerifica
-            ? "Descrivi l'intervento richiesto e specifica il motivo per cui chiedi la verifica della disponibilità di copertura..."
-            : "Descrivi l'intervento richiesto e la motivazione per cui stai richiedendo l'approvazione senza reintegro (investimento a riduzione margine)...";
+          noteIntervento.placeholder = "Descrivi l'intervento richiesto e la motivazione per cui stai richiedendo l'approvazione senza reintegro (investimento a riduzione margine)...";
         } else {
           rinfrescaObbligatorietaNote();
           noteIntervento.placeholder = "Inserisci qui eventuali note, dettagli o la ripartizione pluriennale...";
@@ -1367,6 +1380,83 @@
         blockFlow("Errore caricamento dati: " + err.message);
       }
 
+      // Consolidamento: la validazione del Periodo Validità era duplicata quasi identica nei due
+      // rami del submit (standard e fuori binario). Estratta qui per evitare che le due copie
+      // divergano in futuro.
+      function validaEDescriviPeriodoValidita() {
+        const tipoValidita = selectValidita.value;
+        if (!tipoValidita) {
+          alert("Errore: selezionare un Periodo Validità dal menu a tendina.");
+          return null;
+        }
+
+        if (tipoValidita === "annuale") {
+          const dIn = dataInizioAnnuale.value;
+          const dFi = dataFineAnnuale.value;
+          if (!dIn || !dFi) {
+            alert("Errore: inserire Data Inizio e Data Fine per il periodo annuale.");
+            return null;
+          }
+          if (dIn > dFi) {
+            alert("Errore: la Data Fine non può essere precedente alla Data Inizio.");
+            return null;
+          }
+          return {
+            tipoValidita,
+            dettaglio: `Annuale (Anno ref: ${annoAnnuale.value}) - Dal ${formatDateIT(dIn)} al ${formatDateIT(dFi)}`
+          };
+        }
+
+        if (tipoValidita === "pluriennale") {
+          const mIn = meseInizioPluri.value;
+          const aFi = annoFinePluri.value;
+          if (!mIn || !aFi) {
+            alert("Errore: selezionare il Mese di partenza e l'Anno di scadenza per il periodo pluriennale.");
+            return null;
+          }
+          return {
+            tipoValidita,
+            dettaglio: `Pluriennale - Partenza: ${mIn} ${getCurrentYear()} -> Scadenza Anno: ${aFi}`
+          };
+        }
+
+        if (tipoValidita === "spot") {
+          const mScelto = meseSpot.value;
+          if (!mScelto) {
+            alert("Errore: selezionare il Mese di liquidazione per l'intervento Spot.");
+            return null;
+          }
+          return {
+            tipoValidita,
+            dettaglio: `Una tantum / Spot - Mese liquidazione: ${mScelto} ${getCurrentYear()}`
+          };
+        }
+
+        return null;
+      }
+
+      // Consolidamento: anche l'estrazione dei dati del cliente selezionato (PdV, ragione
+      // sociale, region, email RSM, venditore, gruppo, fornitore scelto) era duplicata tra i
+      // due rami del submit con nomi variabile diversi (es. cPdv / cPdvF). Estratta qui.
+      function estraiDatiClienteCorrente() {
+        return {
+          cPdv: selectedCustomer.codPdV || selectedCustomer.CodPdV || "",
+          cRag: selectedCustomer.ragioneSociale || selectedCustomer.RagioneSociale || "",
+          cBu: estraiCodiceRegion(selectedCustomer),
+          cEmailRsm: (
+            selectedCustomer.emailResponsabileCommerciale ||
+            selectedCustomer.EmailResponsabileCommerciale ||
+            ""
+          ).trim().toLowerCase(),
+          cVen: selectedCustomer.venditore || selectedCustomer.Venditore || "N/D",
+          gruppoScelto: gruppoCliente.value,
+          fornitoreScelto: (() => {
+            const opt = selectFornitore.options[selectFornitore.selectedIndex];
+            return opt ? opt.textContent : "Non specificato";
+          })()
+        };
+      }
+
       submitBtn.addEventListener("click", () => {
         if (flowBlocked) {
           alert("Impossibile procedere: il flusso è bloccato. Verificare il messaggio mostrato nell'interfaccia e ricaricare l'add-in se necessario.");
@@ -1379,7 +1469,7 @@
           alert("Errore: selezionare il Percorso Richiesta prima di procedere.");
           return;
         }
-        const isPercorsoFuoriBinario = percorsoSelezionato === PERCORSO_RICHIESTA.fuoriBinarioVerifica || percorsoSelezionato === PERCORSO_RICHIESTA.fuoriBinarioSenzaReintegro;
+        const isPercorsoFuoriBinario = percorsoSelezionato === PERCORSO_RICHIESTA.fuoriBinarioSenzaReintegro;
 
         // ─────────────────────────────────────────────────────────
         // PERCORSO FUORI BINARIO (2 e 3) — validazione e invio
@@ -1399,37 +1489,19 @@
             alert("Errore: il campo Note/Descrizione è obbligatorio per i percorsi fuori binario.");
             return;
           }
-          const tipoValiditaFuori = selectValidita.value;
-          if (!tipoValiditaFuori) {
-            alert("Errore: selezionare un Periodo Validità dal menu a tendina.");
-            return;
-          }
-          let stringaDettaglioValiditaFuori = "";
-          if (tipoValiditaFuori === "annuale") {
-            const dIn = dataInizioAnnuale.value;
-            const dFi = dataFineAnnuale.value;
-            if (!dIn || !dFi) { alert("Errore: inserire Data Inizio e Data Fine per il periodo annuale."); return; }
-            if (dIn > dFi) { alert("Errore: la Data Fine non può essere precedente alla Data Inizio."); return; }
-            stringaDettaglioValiditaFuori = `Annuale (Anno ref: ${annoAnnuale.value}) - Dal ${formatDateIT(dIn)} al ${formatDateIT(dFi)}`;
-          } else if (tipoValiditaFuori === "pluriennale") {
-            const mIn = meseInizioPluri.value;
-            const aFi = annoFinePluri.value;
-            if (!mIn || !aFi) { alert("Errore: selezionare il Mese di partenza e l'Anno di scadenza per il periodo pluriennale."); return; }
-            stringaDettaglioValiditaFuori = `Pluriennale - Partenza: ${mIn} ${getCurrentYear()} -> Scadenza Anno: ${aFi}`;
-          } else if (tipoValiditaFuori === "spot") {
-            const mScelto = meseSpot.value;
-            if (!mScelto) { alert("Errore: selezionare il Mese di liquidazione per l'intervento Spot."); return; }
-            stringaDettaglioValiditaFuori = `Una tantum / Spot - Mese liquidazione: ${mScelto} ${getCurrentYear()}`;
-          }
+          const risultatoValiditaFuori = validaEDescriviPeriodoValidita();
+          if (!risultatoValiditaFuori) return;
+          const stringaDettaglioValiditaFuori = risultatoValiditaFuori.dettaglio;
 
-          const cPdvF = selectedCustomer.codPdV || selectedCustomer.CodPdV || "";
-          const cRagF = selectedCustomer.ragioneSociale || selectedCustomer.RagioneSociale || "";
-          const cBuF = estraiCodiceRegion(selectedCustomer);
-          const cEmailRsmF = (selectedCustomer.emailResponsabileCommerciale || selectedCustomer.EmailResponsabileCommerciale || "").trim().toLowerCase();
-          const cVenF = selectedCustomer.venditore || selectedCustomer.Venditore || "N/D";
-          const gruppoSceltF = gruppoCliente.value;
-          const fornitoreOptF = selectFornitore.options[selectFornitore.selectedIndex];
-          const fornitoreSceltF = fornitoreOptF ? fornitoreOptF.textContent : "Non specificato";
+          const {
+            cPdv: cPdvF,
+            cRag: cRagF,
+            cBu: cBuF,
+            cEmailRsm: cEmailRsmF,
+            cVen: cVenF,
+            gruppoScelto: gruppoSceltF,
+            fornitoreScelto: fornitoreSceltF
+          } = estraiDatiClienteCorrente();
           const selectPercorsoEl = document.getElementById("selectPercorso");
           const percorsoLabelF = selectPercorsoEl.options[selectPercorsoEl.selectedIndex].text;
 
@@ -1474,7 +1546,7 @@
           const messageFormOptionsFuori = {
             toRecipients: recipientsFuori.toRecipients,
             ccRecipients: recipientsFuori.ccRecipients,
-            subject: `Region: ${cBuF} - Richiesta RV [verifica disponibilità reintegro] - ${cPdvF} - ${cRagF}`,
+            subject: `Region: ${cBuF} - Richiesta RV [${percorsoLabelF}] - ${cPdvF} - ${cRagF}`,
             htmlBody: htmlBodyFuori
           };
 
@@ -1567,41 +1639,10 @@
           }
         }
 
-        const tipoValidita = selectValidita.value;
-        if (!tipoValidita) {
-          alert("Errore: selezionare un Periodo Validità dal menu a tendina.");
-          return;
-        }
-
-        let stringaDettaglioValidita = "";
-        if (tipoValidita === "annuale") {
-          const dIn = dataInizioAnnuale.value;
-          const dFi = dataFineAnnuale.value;
-          if (!dIn || !dFi) {
-            alert("Errore: inserire Data Inizio e Data Fine per il periodo annuale.");
-            return;
-          }
-          if (dIn > dFi) {
-            alert("Errore: la Data Fine non può essere precedente alla Data Inizio.");
-            return;
-          }
-          stringaDettaglioValidita = `Annuale (Anno ref: ${annoAnnuale.value}) - Dal ${formatDateIT(dIn)} al ${formatDateIT(dFi)}`;
-        } else if (tipoValidita === "pluriennale") {
-          const mIn = meseInizioPluri.value;
-          const aFi = annoFinePluri.value;
-          if (!mIn || !aFi) {
-            alert("Errore: selezionare il Mese di partenza e l’Anno di scadenza per il periodo pluriennale.");
-            return;
-          }
-          stringaDettaglioValidita = `Pluriennale - Partenza: ${mIn} ${getCurrentYear()} -> Scadenza Anno: ${aFi}`;
-        } else if (tipoValidita === "spot") {
-          const mScelto = meseSpot.value;
-          if (!mScelto) {
-            alert("Errore: selezionare il Mese di liquidazione per l’intervento Spot.");
-            return;
-          }
-          stringaDettaglioValidita = `Una tantum / Spot - Mese liquidazione: ${mScelto} ${getCurrentYear()}`;
-        }
+        const risultatoValidita = validaEDescriviPeriodoValidita();
+        if (!risultatoValidita) return;
+        const tipoValidita = risultatoValidita.tipoValidita;
+        const stringaDettaglioValidita = risultatoValidita.dettaglio;
 
         const tImporto = isMerceOmaggio ? "Non applicabile" : tipoImporto.value;
         const valReintegrato = isMerceOmaggio ? 0 : parseFloat(importoReintegrato.value);
@@ -1630,14 +1671,15 @@
           txtExtra = (valLiquidare - valReintegrato).toFixed(2) + " €";
         }
 
-        const cPdv = selectedCustomer.codPdV || selectedCustomer.CodPdV || "";
-        const cRag = selectedCustomer.ragioneSociale || selectedCustomer.RagioneSociale || "";
-        const cBu = estraiCodiceRegion(selectedCustomer);
-        const cEmailRsm = (
-          selectedCustomer.emailResponsabileCommerciale ||
-          selectedCustomer.EmailResponsabileCommerciale ||
-          ""
-        ).trim().toLowerCase();
+        const {
+          cPdv,
+          cRag,
+          cBu,
+          cEmailRsm,
+          cVen,
+          gruppoScelto,
+          fornitoreScelto
+        } = estraiDatiClienteCorrente();
 
         const recipients = buildRecipients({
           region: cBu,
@@ -1648,19 +1690,18 @@
           percorso: percorsoSelezionato
         });
 
-        if (isMerceOmaggio && !recipients.serviceRecipient) {
-          alert(`Errore: impossibile determinare la casella clienti/service per la Region ${cBu || "Region non disponibile"}. Verificare la configurazione del cliente.`);
+        if (!recipients.toRecipients.length) {
+          const messaggioDestinatarioMancante = isMerceOmaggio
+            ? `Errore: impossibile determinare la casella clienti/service per la Region ${cBu || "Region non disponibile"}. Verificare la configurazione del cliente.`
+            : `Errore: impossibile determinare il destinatario RSM per il cliente selezionato (campo Email Responsabile Commerciale mancante o non valido in anagrafica). Verificare QryCustomerMaster prima di inviare la richiesta.`;
+          alert(messaggioDestinatarioMancante);
           return;
         }
 
         log("Region rilevata: " + cBu + " | TO: " + recipients.toRecipients.join(", ") + " | CC: " + recipients.ccRecipients.join(", "));
 
-        const cVen = selectedCustomer.venditore || selectedCustomer.Venditore || "N/D";
         const qStimaText = quantitaStima.required ? quantitaStima.value : "Non richiesta";
         const udmText = quantitaStima.required ? unitaMisura.value : "Non richiesta";
-        const gruppoScelto = gruppoCliente.value;
-        const fornitoreOpt = selectFornitore.options[selectFornitore.selectedIndex];
-        const fornitoreScelto = fornitoreOpt ? fornitoreOpt.textContent : "Non specificato";
 
         const righeMerceOmaggio = isMerceOmaggio
           ? `
