@@ -669,6 +669,28 @@
           ""
         ).trim().toLowerCase();
 
+        // ── DEBUG TEMPORANEO (da rimuovere a diagnosi conclusa) ──────────────────
+        // Aiuta a capire se il mancato aggancio Fornitore→Tipologia dipende da un
+        // disallineamento di Region, di CodFornitore, o da un'eccezione emailRV.
+        if (codFornitore) {
+          const righeStessoFornitore = fornitoreTipologiaDb.filter(item =>
+            String(item.CodFornitore || "").trim() === String(codFornitore).trim()
+          );
+          const regionPresentiSuQuelFornitore = [...new Set(righeStessoFornitore.map(item => String(item.Region || "").trim()))];
+          console.log(
+            `[DEBUG TIPOLOGIA] CodFornitore cercato="${codFornitore}" | RegionCliente="${regionCliente}" | ` +
+            `EmailRvCliente="${emailRvCliente || "(vuota)"}" | ` +
+            `Righe in FornitoriTipologie con questo CodFornitore (qualsiasi region): ${righeStessoFornitore.length} | ` +
+            `Region presenti su quelle righe: [${regionPresentiSuQuelFornitore.join(", ") || "nessuna"}]`
+          );
+          if (righeStessoFornitore.length === 0) {
+            console.warn(`[DEBUG TIPOLOGIA] Nessuna riga in FornitoriTipologieFASE-b.json ha CodFornitore="${codFornitore}". Controllare che il codice coincida esattamente con quello in Fornitori.json (spazi, zeri iniziali, ecc.).`);
+          } else if (!regionPresentiSuQuelFornitore.includes(regionCliente)) {
+            console.warn(`[DEBUG TIPOLOGIA] Il fornitore esiste in FornitoriTipologieFASE-b.json ma non per la Region "${regionCliente}" del cliente selezionato (ha invece: ${regionPresentiSuQuelFornitore.join(", ")}).`);
+          }
+        }
+        // ── FINE DEBUG TEMPORANEO ─────────────────────────────────────────────────
+
         return fornitoreTipologiaDb.filter(item => {
           if (codFornitore && String(item.CodFornitore || "").trim() !== String(codFornitore).trim()) return false;
           if (String(item.Region || "").trim() !== regionCliente) return false;
