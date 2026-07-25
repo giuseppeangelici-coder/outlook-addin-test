@@ -1,5 +1,255 @@
 [
   {
+    "CodFornitore": "6700000073",
+    "RagSocFornitore": "Coca Cola Hbc Italia S.R.L.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6716020211",
+    "RagSocFornitore": "Tulli Acque Minerali S.R.L.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700000187",
+    "RagSocFornitore": "Gioia Luisa S.R.L.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700000111",
+    "RagSocFornitore": "Cantine Riunite E Civ. SocietàCooperativa Agricola",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6704010390",
+    "RagSocFornitore": "Terre Cevico Soc.Coop.Agr.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700000333",
+    "RagSocFornitore": "I.B.G. S.p.A.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "0000006701",
+    "RagSocFornitore": "Heineken Italia S.p.A.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700201391",
+    "RagSocFornitore": "Davide Campari Milano N.V.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700000010",
+    "RagSocFornitore": "Acqua Minerale San Benedetto S.p.A.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700000011",
+    "RagSocFornitore": "Sanpellegrino S.p.A.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700000040",
+    "RagSocFornitore": "Diageo Italia S.p.A.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700000129",
+    "RagSocFornitore": "Martini & Rossi S.p.A.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700000180",
+    "RagSocFornitore": "Anheuser-Busch Inbev Italia S.p.A.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700000012",
+    "RagSocFornitore": "Ceres S.p.A.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700000038",
+    "RagSocFornitore": "Red Bull S.R.L.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700000205",
+    "RagSocFornitore": "Conserve Italia SocietàCooperativa Agricola",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6704001586",
+    "RagSocFornitore": "Ferrero Commerciale Italia S.R.L.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700000110",
+    "RagSocFornitore": "Serena Wines 1881 S.R.L. A Socio Un",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700202061",
+    "RagSocFornitore": "San Bernardo S.p.A.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700201553",
+    "RagSocFornitore": "Tek Bar S.R.L.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700000068",
+    "RagSocFornitore": "Pepsico Beverages Italia S.R.L.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700000117",
+    "RagSocFornitore": "Pernod Ricard Italia S.p.A.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6704007029",
+    "RagSocFornitore": "Coste Petrai S.R.L.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6704003926",
+    "RagSocFornitore": "Spinelli S.R.L.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700000502",
+    "RagSocFornitore": "Cantine Quattro Valli S.R.L.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700201710",
+    "RagSocFornitore": "Società Agricola Roeno Di FugattiR. & C.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700200134",
+    "RagSocFornitore": "Montenegro S.R.L.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700000277",
+    "RagSocFornitore": "Olitalia S.R.L.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700000235",
+    "RagSocFornitore": "Velier S.p.A.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6748020581",
+    "RagSocFornitore": "Cantina Cooperativa Vignaioli",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700201772",
+    "RagSocFornitore": "Molino Vigevano 1936 S.R.L.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6704002063",
+    "RagSocFornitore": "Compagnia Dei Caraibi S.p.A.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6704009603",
+    "RagSocFornitore": "Casa Vinicola Botter Carlo & C. S.p",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700200810",
+    "RagSocFornitore": "Luigi Lavazza S.p.A.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700201079",
+    "RagSocFornitore": "Ronco Dei Tassi Di Coser Fabio& C. Societa' Semplice Agricola",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6706000006",
+    "RagSocFornitore": "Paulaner Distribuzione S.R.L.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6704003693",
+    "RagSocFornitore": "Villani S.p.A.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700200893",
+    "RagSocFornitore": "Distilleria F.lli Caffo S.R.L.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700000103",
+    "RagSocFornitore": "Società Agricola Cà Rugate DiTessari Michele E Amedeo S.S.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700000275",
+    "RagSocFornitore": "Azienda Vinicola Follador Di RossiItalia & C. S.N.C.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6704003525",
+    "RagSocFornitore": "Il Filare S.R.L.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700000164",
+    "RagSocFornitore": "Maniva S.p.A.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700000006",
+    "RagSocFornitore": "Ferrarelle S.p.A.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700201230",
+    "RagSocFornitore": "Casoni Fabbricazione Liquori S.p.A.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700200172",
+    "RagSocFornitore": "Merotto Graziano",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700509617",
+    "RagSocFornitore": "Ucinque S.R.L.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700000132",
+    "RagSocFornitore": "Molinari Italia S.p.A.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700201916",
+    "RagSocFornitore": "Idropejo S.R.L.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6704006203",
+    "RagSocFornitore": "Polselli S.p.A.",
+    "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700000004",
+    "RagSocFornitore": "Caviro Soc.Coop.Agr.",
+    "Region": "6716"
+  },
+  {
     "CodFornitore": "6700000032",
     "RagSocFornitore": "Montelvini S.R.L.",
     "Region": "6716"
@@ -1303,6 +1553,256 @@
     "CodFornitore": "6748121389",
     "RagSocFornitore": "Papeschi S.R.L.",
     "Region": "6716"
+  },
+  {
+    "CodFornitore": "6700000073",
+    "RagSocFornitore": "Coca Cola Hbc Italia S.R.L.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6716020211",
+    "RagSocFornitore": "Tulli Acque Minerali S.R.L.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700000187",
+    "RagSocFornitore": "Gioia Luisa S.R.L.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700000111",
+    "RagSocFornitore": "Cantine Riunite E Civ. SocietàCooperativa Agricola",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6704010390",
+    "RagSocFornitore": "Terre Cevico Soc.Coop.Agr.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700000333",
+    "RagSocFornitore": "I.B.G. S.p.A.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "0000006701",
+    "RagSocFornitore": "Heineken Italia S.p.A.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700201391",
+    "RagSocFornitore": "Davide Campari Milano N.V.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700000010",
+    "RagSocFornitore": "Acqua Minerale San Benedetto S.p.A.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700000011",
+    "RagSocFornitore": "Sanpellegrino S.p.A.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700000040",
+    "RagSocFornitore": "Diageo Italia S.p.A.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700000129",
+    "RagSocFornitore": "Martini & Rossi S.p.A.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700000180",
+    "RagSocFornitore": "Anheuser-Busch Inbev Italia S.p.A.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700000012",
+    "RagSocFornitore": "Ceres S.p.A.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700000038",
+    "RagSocFornitore": "Red Bull S.R.L.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700000205",
+    "RagSocFornitore": "Conserve Italia SocietàCooperativa Agricola",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6704001586",
+    "RagSocFornitore": "Ferrero Commerciale Italia S.R.L.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700000110",
+    "RagSocFornitore": "Serena Wines 1881 S.R.L. A Socio Un",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700202061",
+    "RagSocFornitore": "San Bernardo S.p.A.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700201553",
+    "RagSocFornitore": "Tek Bar S.R.L.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700000068",
+    "RagSocFornitore": "Pepsico Beverages Italia S.R.L.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700000117",
+    "RagSocFornitore": "Pernod Ricard Italia S.p.A.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6704007029",
+    "RagSocFornitore": "Coste Petrai S.R.L.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6704003926",
+    "RagSocFornitore": "Spinelli S.R.L.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700000502",
+    "RagSocFornitore": "Cantine Quattro Valli S.R.L.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700201710",
+    "RagSocFornitore": "Società Agricola Roeno Di FugattiR. & C.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700200134",
+    "RagSocFornitore": "Montenegro S.R.L.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700000277",
+    "RagSocFornitore": "Olitalia S.R.L.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700000235",
+    "RagSocFornitore": "Velier S.p.A.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6748020581",
+    "RagSocFornitore": "Cantina Cooperativa Vignaioli",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700201772",
+    "RagSocFornitore": "Molino Vigevano 1936 S.R.L.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6704002063",
+    "RagSocFornitore": "Compagnia Dei Caraibi S.p.A.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6704009603",
+    "RagSocFornitore": "Casa Vinicola Botter Carlo & C. S.p",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700200810",
+    "RagSocFornitore": "Luigi Lavazza S.p.A.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700201079",
+    "RagSocFornitore": "Ronco Dei Tassi Di Coser Fabio& C. Societa' Semplice Agricola",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6706000006",
+    "RagSocFornitore": "Paulaner Distribuzione S.R.L.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6704003693",
+    "RagSocFornitore": "Villani S.p.A.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700200893",
+    "RagSocFornitore": "Distilleria F.lli Caffo S.R.L.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700000103",
+    "RagSocFornitore": "Società Agricola Cà Rugate DiTessari Michele E Amedeo S.S.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700000275",
+    "RagSocFornitore": "Azienda Vinicola Follador Di RossiItalia & C. S.N.C.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6704003525",
+    "RagSocFornitore": "Il Filare S.R.L.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700000164",
+    "RagSocFornitore": "Maniva S.p.A.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700000006",
+    "RagSocFornitore": "Ferrarelle S.p.A.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700201230",
+    "RagSocFornitore": "Casoni Fabbricazione Liquori S.p.A.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700200172",
+    "RagSocFornitore": "Merotto Graziano",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700509617",
+    "RagSocFornitore": "Ucinque S.R.L.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700000132",
+    "RagSocFornitore": "Molinari Italia S.p.A.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700201916",
+    "RagSocFornitore": "Idropejo S.R.L.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6704006203",
+    "RagSocFornitore": "Polselli S.p.A.",
+    "Region": "6771"
+  },
+  {
+    "CodFornitore": "6700000004",
+    "RagSocFornitore": "Caviro Soc.Coop.Agr.",
+    "Region": "6771"
   },
   {
     "CodFornitore": "6700000032",
