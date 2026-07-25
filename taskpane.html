@@ -1,20 +1,23 @@
 <!-- 
   ADD-IN RICHIESTE RV - TASKPANE COMPONENT
-  Version: 2.3.0 - Fase B (in test)
+  Version: 2.3.1 - Fase B (in test)
   Date: 2026-07-26
   Changes:
-    - UX: Fornitore e Tipologia unificati nello stesso pattern "combobox": digitando si
-      filtra con ricerca fuzzy, cliccando (anche a campo già valorizzato) si vede l'elenco
-      completo disponibile, come una tendina. L'utente può iniziare a compilare
-      indifferentemente Fornitore o Tipologia, in qualsiasi ordine.
-    - RIMOSSA la doppia modalità di Tipologia (campo di ricerca prima di scegliere il
-      Fornitore / select nativa dopo): ora è sempre lo stesso campo di ricerca, filtrato
-      per Fornitore se già scelto, altrimenti sull'intera region del cliente.
-    - Introdotta selectedTipologia come stato esplicito (analogo a selectedFornitore),
-      sostituendo il vecchio select nativo #selectTipologia (rimosso da HTML e JS).
-    - Rimosso il blocco di debug temporaneo introdotto per diagnosticare il mancato
-      aggancio Fornitore→Tipologia (causa individuata e risolta: refuso nel codice Region).
+    - FIX: resetForm() ("Pulisci Form") non nascondeva/svuotava le sotto-sezioni Periodo
+      Validità (Annuale/Pluriennale/Spot): impostare selectValidita.value = "" non genera
+      l'evento "change" a cui è agganciata la loro visibilità, quindi restavano visibili a
+      schermo con i vecchi dati dopo il reset. Ora vengono nascoste e svuotate esplicitamente,
+      insieme a eventuali liste di suggerimenti (Cliente/Fornitore/Tipologia) rimaste aperte.
   Changelog precedente:
+  Changelog precedente:
+    - v2.3.0 (Fase B): Fornitore e Tipologia unificati nello stesso pattern "combobox":
+      digitando si filtra con ricerca fuzzy, cliccando (anche a campo già valorizzato) si
+      vede l'elenco completo disponibile, come una tendina. Rimossa la doppia modalità di
+      Tipologia (campo di ricerca prima di scegliere il Fornitore / select nativa dopo) e
+      il relativo select nativo #selectTipologia, sostituito da selectedTipologia come
+      stato esplicito (analogo a selectedFornitore). Rimosso il blocco di debug temporaneo
+      per il mancato aggancio Fornitore→Tipologia (causa individuata: refuso nel codice
+      Region).
     - v2.2.0 (Fase B): nuovo modello dati (Fornitori.json, FornitoriTipologie evoluta con
       Region/emailRV/ObbligoStima), rimozione Budget.json e fornitore fittizio Partesa,
       nuovo percorso "Merce omaggio".
@@ -299,11 +302,11 @@
   <div id="log">Log eventi...</div>
 
   <footer class="app-footer">
-    <span>Versione: v2.3.0 - Fase B (in test)</span>
+    <span>Versione: v2.3.1 - Fase B (in test)</span>
   </footer>
 
   <script>
-    const APP_VERSION = "Versione: v2.3.0 - Fase B (in test)";
+    const APP_VERSION = "Versione: v2.3.1 - Fase B (in test)";
     const POWER_AUTOMATE_URL = "https://default66e853deece344dd9d66ee6bdf4159.d4.environment.api.powerplatform.com/powerautomate/automations/direct/workflows/465577c70a414425a1f278e3c3f2bb43/triggers/manual/paths/invoke?api-version=1";
 
     const DEBUG_MODE = false;
@@ -403,6 +406,35 @@
       // Ripristina percorso a vuoto o standard
       const selectPercorso = document.getElementById("selectPercorso");
       selectPercorso.value = "";
+
+      // Le sotto-sezioni Periodo Validità (Annuale/Pluriennale/Spot) sono mostrate e
+      // nascoste da un listener sull'evento "change" di selectValidita: impostare
+      // .value = "" sopra NON genera quell'evento, quindi vanno nascoste e svuotate
+      // esplicitamente qui, altrimenti resterebbero visibili a schermo con i vecchi dati.
+      document.getElementById("sezAnnuale").style.display = "none";
+      document.getElementById("sezPluriennale").style.display = "none";
+      document.getElementById("sezSpot").style.display = "none";
+      document.getElementById("annoAnnuale").selectedIndex = 0;
+      document.getElementById("dataInizioAnnuale").value = "";
+      document.getElementById("dataInizioAnnuale").required = false;
+      document.getElementById("dataFineAnnuale").value = "";
+      document.getElementById("dataFineAnnuale").required = false;
+      document.getElementById("meseInizioPluri").value = "";
+      document.getElementById("meseInizioPluri").required = false;
+      document.getElementById("annoFinePluri").value = "";
+      document.getElementById("annoFinePluri").required = false;
+      document.getElementById("meseSpot").value = "";
+      document.getElementById("meseSpot").required = false;
+
+      // Chiude ed svuota eventuali liste di suggerimenti rimaste aperte
+      ["suggestions", "suggestionsFornitore", "suggestionsTipologia"].forEach(id => {
+        const el = document.getElementById(id);
+        el.innerHTML = "";
+        el.style.display = "none";
+      });
+      highlightedIndex = -1;
+      highlightedIndexFornitore = -1;
+      highlightedIndexTipologia = -1;
 
       // Disabilita controlli in attesa di un nuovo cliente
       document.getElementById("submitBtn").disabled = true;
