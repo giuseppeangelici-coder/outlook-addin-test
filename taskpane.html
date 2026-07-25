@@ -1,30 +1,23 @@
 <!-- 
   ADD-IN RICHIESTE RV - TASKPANE COMPONENT
-  Version: 2.2.0 - Fase B (in test)
+  Version: 2.3.0 - Fase B (in test)
   Date: 2026-07-26
   Changes:
-    - NUOVO MODELLO DATI: Budget.json non e' piu' consumato dal taskpane. Tipologia e
-      "natura del budget" (uso interno, non ancora consumato) sono ora sulla stessa riga di
-      FornitoriTipologieFASE-b.json (file di test), insieme a Region e all'eccezione emailRV
-      (uno o piu' indirizzi RV separati da virgola: se valorizzato, la tipologia e' visibile
-      solo a quell'RV/quegli RV specifici del cliente selezionato, non a tutta la region).
-    - NUOVO: Fornitori.json come anagrafica fornitori indipendente (CodFornitore,
-      RagSocFornitore, Region), con ricerca fuzzy sul campo Fornitore (prima era un menu a
-      tendina alimentato da FornitoriTipologie).
-    - RIMOSSO: fornitore fittizio "Partesa" e tutta la logica Merce-Omaggio-come-Budget
-      (BUDGET_MODES, BUDGET_LABELS, ensurePartesaOption/removePartesaOption).
-    - NUOVO PERCORSO: "Merce omaggio" (terza voce del Percorso Richiesta) sostituisce la
-      vecchia selezione Budget MERCE OMAGGIO (Partesa)/(reintegrata da fornitore). Richiede
-      cliente e fornitore reale obbligatori, poi mostra solo articoli/quantita' (almeno
-      l'articolo #1), Periodo Validita' (obbligatorio) e Note (facoltative salvo pluriennale).
-    - RINOMINATI i primi due percorsi: "Investimento coperto da fornitore" (ex "...da
-      reintegro") e "Investimento a carico Partesa" (ex "Richiesta approvazione investimento
-      senza reintegro"), invariati nella logica.
-    - ObbligoStima letto direttamente dalla riga di Tipologia abbinata (fornitore+region+RV),
-      non piu' da Budget.json.
-    - Riga "Budget" rimossa dal corpo dell'email (il budget non e' piu' un dato scelto
-      dall'utente).
+    - UX: Fornitore e Tipologia unificati nello stesso pattern "combobox": digitando si
+      filtra con ricerca fuzzy, cliccando (anche a campo già valorizzato) si vede l'elenco
+      completo disponibile, come una tendina. L'utente può iniziare a compilare
+      indifferentemente Fornitore o Tipologia, in qualsiasi ordine.
+    - RIMOSSA la doppia modalità di Tipologia (campo di ricerca prima di scegliere il
+      Fornitore / select nativa dopo): ora è sempre lo stesso campo di ricerca, filtrato
+      per Fornitore se già scelto, altrimenti sull'intera region del cliente.
+    - Introdotta selectedTipologia come stato esplicito (analogo a selectedFornitore),
+      sostituendo il vecchio select nativo #selectTipologia (rimosso da HTML e JS).
+    - Rimosso il blocco di debug temporaneo introdotto per diagnosticare il mancato
+      aggancio Fornitore→Tipologia (causa individuata e risolta: refuso nel codice Region).
   Changelog precedente:
+    - v2.2.0 (Fase B): nuovo modello dati (Fornitori.json, FornitoriTipologie evoluta con
+      Region/emailRV/ObbligoStima), rimozione Budget.json e fornitore fittizio Partesa,
+      nuovo percorso "Merce omaggio".
     - v2.1.0 (Fase A): fix destinatario mancante nel percorso standard, fallback sicuro su
       FornitoriAbilitati e su region non riconosciuta, rimozione percorso "verifica
       disponibilita' reintegro", consolidamento validazione periodo validita' e dati cliente.
@@ -132,22 +125,19 @@
     <option value="Sì">Sì</option>
   </select>
 
-  <!-- 4. FORNITORE (ricerca fuzzy, filtrata per region del cliente) -->
+  <!-- 4. FORNITORE (ricerca fuzzy + elenco a discesa al clic, filtrata per region del cliente) -->
   <label id="labelFornitore" for="searchFornitore">Fornitore</label>
   <div id="fornitoreSearchContainer" class="search-container">
-    <input type="text" id="searchFornitore" placeholder="Cerca fornitore per codice o ragione sociale..." autocomplete="off" disabled>
+    <input type="text" id="searchFornitore" placeholder="Digita per cercare o clicca per vedere l'elenco..." autocomplete="off" disabled>
     <ul id="suggestionsFornitore" class="suggestions-list"></ul>
   </div>
 
-  <!-- 3.1. TIPOLOGIA INTERVENTO -->
-  <label id="labelTipologia" for="inputTipologia">Tipologia Intervento (Cerca linea/prodotto)</label>
+  <!-- 3.1. TIPOLOGIA INTERVENTO (stesso pattern combobox del Fornitore) -->
+  <label id="labelTipologia" for="inputTipologia">Tipologia Intervento (cerca o seleziona dall'elenco)</label>
   <div id="tipologiaSearchContainer" class="search-container">
-    <input type="text" id="inputTipologia" placeholder="Digita una tipologia o selezionala dall'elenco..." autocomplete="off" disabled>
+    <input type="text" id="inputTipologia" placeholder="Digita per cercare o clicca per vedere l'elenco..." autocomplete="off" disabled>
     <ul id="suggestionsTipologia" class="suggestions-list"></ul>
   </div>
-  <select id="selectTipologia" disabled style="display: none;">
-    <option value="">-- Seleziona Tipologia valida --</option>
-  </select>
 
   <!-- 5. PERIODO VALIDITÀ -->
   <label for="selectValidita">Periodo Validità</label>
@@ -309,11 +299,11 @@
   <div id="log">Log eventi...</div>
 
   <footer class="app-footer">
-    <span>Versione: v2.2.0 - Fase B (in test)</span>
+    <span>Versione: v2.3.0 - Fase B (in test)</span>
   </footer>
 
   <script>
-    const APP_VERSION = "Versione: v2.2.0 - Fase B (in test)";
+    const APP_VERSION = "Versione: v2.3.0 - Fase B (in test)";
     const POWER_AUTOMATE_URL = "https://default66e853deece344dd9d66ee6bdf4159.d4.environment.api.powerplatform.com/powerautomate/automations/direct/workflows/465577c70a414425a1f278e3c3f2bb43/triggers/manual/paths/invoke?api-version=1";
 
     const DEBUG_MODE = false;
@@ -334,7 +324,6 @@
 
     const ANNUAL_YEAR_OPTIONS = 2;
     const PLURIENNALE_YEAR_OPTIONS = 5;
-    const TIPOLOGIA_PLACEHOLDER_OPTION = "-- Seleziona Tipologia valida --";
     const EMAIL_ADDRESS_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const DAYS_IN_MONTH_BASE = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
     const REGIONI_VALIDE = ["6716", "6771", "6734", "6724", "6772", "6765", "6770", "6760"];
@@ -369,6 +358,7 @@
     let fornitoriDb = [];
     let selectedCustomer = null;
     let selectedFornitore = null;
+    let selectedTipologia = null;
     let highlightedIndex = -1;
     let highlightedIndexTipologia = -1;
     let highlightedIndexFornitore = -1;
@@ -387,11 +377,11 @@
       // Reset campi di testo/selezione principali
       selectedCustomer = null;
       selectedFornitore = null;
+      selectedTipologia = null;
       document.getElementById("searchCliente").value = "";
       document.getElementById("gruppoCliente").value = "No";
       document.getElementById("searchFornitore").value = "";
       document.getElementById("inputTipologia").value = "";
-      document.getElementById("selectTipologia").value = "";
       document.getElementById("selectValidita").value = "";
 
       // Reset campi economici
@@ -603,7 +593,6 @@
       const searchFornitore = document.getElementById("searchFornitore");
       const suggestionsFornitore = document.getElementById("suggestionsFornitore");
       const inputTipologia = document.getElementById("inputTipologia");
-      const selectTipologia = document.getElementById("selectTipologia");
       const tipologiaLabel = document.getElementById("labelTipologia");
       const tipologiaSearchContainer = document.getElementById("tipologiaSearchContainer");
       const suggestionsTipologia = document.getElementById("suggestionsTipologia");
@@ -653,8 +642,7 @@
 
       function clearTipologiaSelection() {
         inputTipologia.value = "";
-        selectTipologia.innerHTML = `<option value="">${TIPOLOGIA_PLACEHOLDER_OPTION}</option>`;
-        selectTipologia.value = "";
+        selectedTipologia = null;
         suggestionsTipologia.innerHTML = "";
         suggestionsTipologia.style.display = "none";
         highlightedIndexTipologia = -1;
@@ -668,28 +656,6 @@
           selectedCustomer.EmailResponsabileVendite ||
           ""
         ).trim().toLowerCase();
-
-        // ── DEBUG TEMPORANEO (da rimuovere a diagnosi conclusa) ──────────────────
-        // Aiuta a capire se il mancato aggancio Fornitore→Tipologia dipende da un
-        // disallineamento di Region, di CodFornitore, o da un'eccezione emailRV.
-        if (codFornitore) {
-          const righeStessoFornitore = fornitoreTipologiaDb.filter(item =>
-            String(item.CodFornitore || "").trim() === String(codFornitore).trim()
-          );
-          const regionPresentiSuQuelFornitore = [...new Set(righeStessoFornitore.map(item => String(item.Region || "").trim()))];
-          console.log(
-            `[DEBUG TIPOLOGIA] CodFornitore cercato="${codFornitore}" | RegionCliente="${regionCliente}" | ` +
-            `EmailRvCliente="${emailRvCliente || "(vuota)"}" | ` +
-            `Righe in FornitoriTipologie con questo CodFornitore (qualsiasi region): ${righeStessoFornitore.length} | ` +
-            `Region presenti su quelle righe: [${regionPresentiSuQuelFornitore.join(", ") || "nessuna"}]`
-          );
-          if (righeStessoFornitore.length === 0) {
-            console.warn(`[DEBUG TIPOLOGIA] Nessuna riga in FornitoriTipologieFASE-b.json ha CodFornitore="${codFornitore}". Controllare che il codice coincida esattamente con quello in Fornitori.json (spazi, zeri iniziali, ecc.).`);
-          } else if (!regionPresentiSuQuelFornitore.includes(regionCliente)) {
-            console.warn(`[DEBUG TIPOLOGIA] Il fornitore esiste in FornitoriTipologieFASE-b.json ma non per la Region "${regionCliente}" del cliente selezionato (ha invece: ${regionPresentiSuQuelFornitore.join(", ")}).`);
-          }
-        }
-        // ── FINE DEBUG TEMPORANEO ─────────────────────────────────────────────────
 
         return fornitoreTipologiaDb.filter(item => {
           if (codFornitore && String(item.CodFornitore || "").trim() !== String(codFornitore).trim()) return false;
@@ -709,48 +675,24 @@
         });
       }
 
-      function popolaTipologiePerFornitore(codFornitore, tipologiaSelezionata = "") {
-        selectTipologia.innerHTML = `<option value="">${TIPOLOGIA_PLACEHOLDER_OPTION}</option>`;
-        getTipologieFiltrate(codFornitore).forEach(item => {
-          const option = document.createElement("option");
-          option.value = String(item.TipologiaIntervento || "").trim();
-          option.textContent = String(item.TipologiaIntervento || "").trim();
-          selectTipologia.appendChild(option);
-        });
-        if (tipologiaSelezionata) {
-          selectTipologia.value = tipologiaSelezionata;
-        }
-      }
-
+      // Tipologia usa lo stesso pattern "combobox" del Fornitore: nessuna modalità doppia
+      // (prima si passava da campo di ricerca a select nativa una volta scelto il
+      // fornitore). Ora l'utente può digitare o cliccare per vedere l'elenco in
+      // qualunque ordine compili Fornitore e Tipologia; getTipologieFiltrate() si occupa
+      // di restringere l'elenco al fornitore corrente, se già scelto.
       function aggiornaModalitaTipologia() {
         const percorsoAttuale = document.getElementById("selectPercorso").value;
         if (percorsoAttuale !== PERCORSO_RICHIESTA.standard) {
           tipologiaLabel.style.display = "none";
           tipologiaSearchContainer.style.display = "none";
-          selectTipologia.style.display = "none";
           inputTipologia.disabled = true;
-          selectTipologia.disabled = true;
           return;
         }
 
-        const hasSupplier = !!selectedFornitore;
-
         tipologiaLabel.style.display = "block";
-        if (hasSupplier) {
-          tipologiaLabel.textContent = "Tipologia Intervento";
-          tipologiaSearchContainer.style.display = "none";
-          selectTipologia.style.display = "block";
-          inputTipologia.disabled = true;
-          selectTipologia.disabled = !selectedCustomer;
-          popolaTipologiePerFornitore(selectedFornitore.CodFornitore, selectTipologia.value);
-        } else {
-          tipologiaLabel.textContent = "Tipologia Intervento (Cerca linea/prodotto)";
-          tipologiaSearchContainer.style.display = "block";
-          selectTipologia.style.display = "none";
-          inputTipologia.disabled = !selectedCustomer;
-          selectTipologia.disabled = true;
-          selectTipologia.innerHTML = `<option value="">${TIPOLOGIA_PLACEHOLDER_OPTION}</option>`;
-        }
+        tipologiaLabel.textContent = "Tipologia Intervento (cerca o seleziona dall'elenco)";
+        tipologiaSearchContainer.style.display = "block";
+        inputTipologia.disabled = !selectedCustomer;
       }
 
       function fuzzyScoreTesto(query, target) {
@@ -823,8 +765,11 @@
       }
 
       function selezionaFornitore(f) {
+        const nuovoCodice = String(f.CodFornitore || "").trim();
+        const fornitoreCambiato = !selectedFornitore || selectedFornitore.CodFornitore !== nuovoCodice;
+
         selectedFornitore = {
-          CodFornitore: String(f.CodFornitore || "").trim(),
+          CodFornitore: nuovoCodice,
           RagSocFornitore: String(f.RagSocFornitore || f.RagioneSocialeFornitore || "").trim()
         };
         searchFornitore.value = selectedFornitore.RagSocFornitore;
@@ -832,8 +777,11 @@
         suggestionsFornitore.style.display = "none";
         highlightedIndexFornitore = -1;
 
-        // Cambiando fornitore la Tipologia precedente potrebbe non essere più coerente:
-        // aggiornaModalitaTipologia ripopola l'elenco per il nuovo fornitore selezionato.
+        // Cambiando davvero fornitore, la Tipologia precedente potrebbe non essere più
+        // coerente (apparteneva al fornitore precedente): la si azzera per sicurezza.
+        if (fornitoreCambiato) {
+          clearTipologiaSelection();
+        }
         aggiornaModalitaTipologia();
         aggiornaVisibilitaObbligoStima();
       }
@@ -878,22 +826,17 @@
       // direttamente dalla riga di Tipologia abbinata (fornitore + region + eventuale RV).
       function aggiornaVisibilitaObbligoStima() {
         const percorso = document.getElementById("selectPercorso").value;
-        if (percorso !== PERCORSO_RICHIESTA.standard || !selectTipologia.value) {
+        if (percorso !== PERCORSO_RICHIESTA.standard || !selectedTipologia) {
           sezioneStima.style.display = "none";
           quantitaStima.required = false;
           unitaMisura.required = false;
           return;
         }
 
-        const codFornitoreAttuale = selectedFornitore ? selectedFornitore.CodFornitore : "";
-        const match = getTipologieFiltrate(codFornitoreAttuale).find(item =>
-          String(item.TipologiaIntervento || "").trim() === selectTipologia.value.trim()
-        );
-        const obbligoStima = match && (
-          match.ObbligoStima === true ||
-          String(match.ObbligoStima).toLowerCase() === "vero" ||
-          String(match.ObbligoStima).toLowerCase() === "true"
-        );
+        const obbligoStima =
+          selectedTipologia.ObbligoStima === true ||
+          String(selectedTipologia.ObbligoStima).toLowerCase() === "vero" ||
+          String(selectedTipologia.ObbligoStima).toLowerCase() === "true";
 
         if (obbligoStima) {
           sezioneStima.style.display = "block";
@@ -1077,6 +1020,9 @@
 
         const fornitoreMatch = fornitoriDb.find(f => String(f.CodFornitore || "").trim() === targetCodice);
         if (fornitoreMatch) {
+          // selezionaFornitore può azzerare la Tipologia se il fornitore risulta
+          // cambiato: non è un problema, perché selectedTipologia/inputTipologia
+          // vengono impostati di nuovo qui sotto, dopo la chiamata.
           selezionaFornitore(fornitoreMatch);
         } else {
           console.warn(`Fornitore ${targetCodice} presente in FornitoriTipologie ma non trovato in Fornitori.json: uso la ragione sociale della riga Tipologia come fallback.`);
@@ -1085,9 +1031,9 @@
           aggiornaModalitaTipologia();
         }
 
+        selectedTipologia = item;
         inputTipologia.value = targetTipologia;
-        popolaTipologiePerFornitore(targetCodice, targetTipologia);
-        selectTipologia.value = targetTipologia;
+        suggestionsTipologia.innerHTML = "";
         suggestionsTipologia.style.display = "none";
         highlightedIndexTipologia = -1;
         aggiornaVisibilitaObbligoStima();
@@ -1112,7 +1058,7 @@
       function tryResolveTipologiaFromInput() {
         const rawValue = inputTipologia.value.trim();
         if (!rawValue) return null;
-        const matches = getTipologieFiltrate("").filter(item =>
+        const matches = getTipologieFiltrate(selectedFornitore ? selectedFornitore.CodFornitore : "").filter(item =>
           String(item.TipologiaIntervento || "").trim() === rawValue
         );
         if (matches.length === 1) {
@@ -1140,9 +1086,10 @@
       });
 
       searchFornitore.addEventListener("focus", () => {
-        if (searchFornitore.value.trim() === "") {
-          costruisciSuggerimentiFornitore(getFornitoriPerRegioneCliente().slice(0, 15));
-        }
+        // Mostra sempre l'elenco completo dei fornitori della region al clic, come una
+        // vera tendina: se il campo ha già un valore, l'utente può comunque scorrere e
+        // scegliere un'alternativa senza dover prima cancellare il testo.
+        costruisciSuggerimentiFornitore(getFornitoriPerRegioneCliente());
       });
 
       searchFornitore.addEventListener("blur", () => {
@@ -1186,34 +1133,34 @@
         }
       });
 
-      selectTipologia.addEventListener("change", () => {
-        inputTipologia.value = selectTipologia.value;
-        aggiornaVisibilitaObbligoStima();
-      });
-
       inputTipologia.addEventListener("input", () => {
         highlightedIndexTipologia = -1;
+        // Se l'utente modifica il testo, la Tipologia già selezionata non è più valida
+        // finché non ne sceglie una nuova (stesso pattern del campo Fornitore).
+        selectedTipologia = null;
+        aggiornaVisibilitaObbligoStima();
+
         const query = inputTipologia.value.toLowerCase().trim();
         if (query.length < 1) {
           suggestionsTipologia.style.display = "none";
           return;
         }
 
-        const filtrate = getTipologieFiltrate("").filter(item =>
+        const filtrate = getTipologieFiltrate(selectedFornitore ? selectedFornitore.CodFornitore : "").filter(item =>
           String(item.TipologiaIntervento || "").toLowerCase().includes(query)
         ).slice(0, 15);
         costruisciSuggerimentiTipologia(filtrate);
       });
 
       inputTipologia.addEventListener("focus", () => {
-        if (inputTipologia.value.trim() === "") {
-          costruisciSuggerimentiTipologia(getTipologieFiltrate("").slice(0, 15));
-        }
+        // Come per Fornitore: mostra sempre l'elenco completo disponibile al clic
+        // (filtrato per fornitore se già scelto, altrimenti su tutta la region).
+        costruisciSuggerimentiTipologia(getTipologieFiltrate(selectedFornitore ? selectedFornitore.CodFornitore : ""));
       });
 
       inputTipologia.addEventListener("blur", () => {
         window.setTimeout(() => {
-          if (!selectedFornitore) {
+          if (!selectedTipologia) {
             tryResolveTipologiaFromInput();
           }
         }, 150);
@@ -1678,15 +1625,15 @@
             return;
           }
         }
-
-        const tipologiaScelta = selectedFornitore ? selectTipologia.value.trim() : inputTipologia.value.trim();
-        const tipologiaValida = getTipologieFiltrate(selectedFornitore ? selectedFornitore.CodFornitore : "").some(item =>
-          String(item.TipologiaIntervento || "").trim() === tipologiaScelta
-        );
-        if (!tipologiaScelta || !tipologiaValida) {
-          alert("Errore: selezionare una Tipologia Intervento valida coerente con il Fornitore scelto.");
-          return;
+        if (!selectedTipologia) {
+          const resolvedTipologia = tryResolveTipologiaFromInput();
+          if (!resolvedTipologia) {
+            alert("Errore: selezionare una Tipologia Intervento valida dall'elenco.");
+            return;
+          }
         }
+
+        const tipologiaScelta = selectedTipologia.TipologiaIntervento.trim();
 
         const risultatoValidita = validaEDescriviPeriodoValidita();
         if (!risultatoValidita) return;
