@@ -1,15 +1,17 @@
 <!-- 
   ADD-IN RICHIESTE RV - TASKPANE COMPONENT
-  Version: 2.3.1 - Fase B (in test)
+  Version: 2.3.2 - Fase B (in test)
   Date: 2026-07-26
   Changes:
-    - FIX: resetForm() ("Pulisci Form") non nascondeva/svuotava le sotto-sezioni Periodo
-      Validità (Annuale/Pluriennale/Spot): impostare selectValidita.value = "" non genera
-      l'evento "change" a cui è agganciata la loro visibilità, quindi restavano visibili a
-      schermo con i vecchi dati dopo il reset. Ora vengono nascoste e svuotate esplicitamente,
-      insieme a eventuali liste di suggerimenti (Cliente/Fornitore/Tipologia) rimaste aperte.
+    - FIX: con "Tipo di Richiesta" vuoto, il pannello economico standard (Tipo Importo,
+      Importo Reintegrato, ecc.) restava visibile anche se disabilitato, perché isStandard
+      trattava il percorso vuoto come "standard". Ora richiede un match esatto: con nessun
+      percorso scelto, non è visibile nulla di condizionato al percorso, coerentemente con
+      quanto già avveniva per la Tipologia.
   Changelog precedente:
-  Changelog precedente:
+    - v2.3.1: fix resetForm() ("Pulisci Form") che non nascondeva/svuotava le sotto-sezioni
+      Periodo Validità (Annuale/Pluriennale/Spot), rimaste visibili con i vecchi dati dopo
+      il reset perché legate all'evento "change" mai generato da .value = "".
     - v2.3.0 (Fase B): Fornitore e Tipologia unificati nello stesso pattern "combobox":
       digitando si filtra con ricerca fuzzy, cliccando (anche a campo già valorizzato) si
       vede l'elenco completo disponibile, come una tendina. Rimossa la doppia modalità di
@@ -302,11 +304,11 @@
   <div id="log">Log eventi...</div>
 
   <footer class="app-footer">
-    <span>Versione: v2.3.1 - Fase B (in test)</span>
+    <span>Versione: v2.3.2 - Fase B (in test)</span>
   </footer>
 
   <script>
-    const APP_VERSION = "Versione: v2.3.1 - Fase B (in test)";
+    const APP_VERSION = "Versione: v2.3.2 - Fase B (in test)";
     const POWER_AUTOMATE_URL = "https://default66e853deece344dd9d66ee6bdf4159.d4.environment.api.powerplatform.com/powerautomate/automations/direct/workflows/465577c70a414425a1f278e3c3f2bb43/triggers/manual/paths/invoke?api-version=1";
 
     const DEBUG_MODE = false;
@@ -966,7 +968,7 @@
       // MODIFICA BUG: Gestione pulita e isolata delle sezioni visibili
       window.aggiornaVisibilitaPercorso = function() {
         const percorso = document.getElementById("selectPercorso").value;
-        const isStandard = !percorso || percorso === PERCORSO_RICHIESTA.standard;
+        const isStandard = percorso === PERCORSO_RICHIESTA.standard;
         const isFuoriBinario = percorso === PERCORSO_RICHIESTA.fuoriBinarioSenzaReintegro;
         const isMerceOmaggio = percorso === PERCORSO_RICHIESTA.merceOmaggio;
         const hasCustomer = !!selectedCustomer;
