@@ -488,24 +488,24 @@
     "ObbligoStima": "TRUE"
   },
   {
-    "CodFornitore": "6700201553",
-    "RagioneSocialeFornitore": "Tek Bar S.R.L.",
+    "CodFornitore": "IT50",
+    "RagioneSocialeFornitore": "Partesa S.r.l.",
     "TipologiaIntervento": "TEK BAR & LIQ.ID - Contratto I soglia",
     "Region": "6716",
     "emailRV": "",
     "ObbligoStima": "TRUE"
   },
   {
-    "CodFornitore": "6700201553",
-    "RagioneSocialeFornitore": "Tek Bar S.R.L.",
+    "CodFornitore": "IT50",
+    "RagioneSocialeFornitore": "Partesa S.r.l.",
     "TipologiaIntervento": "TEK BAR & LIQ.ID - Contratto II soglia",
     "Region": "6716",
     "emailRV": "",
     "ObbligoStima": "TRUE"
   },
   {
-    "CodFornitore": "6700201553",
-    "RagioneSocialeFornitore": "Tek Bar S.R.L.",
+    "CodFornitore": "IT50",
+    "RagioneSocialeFornitore": "Partesa S.r.l.",
     "TipologiaIntervento": "TEK BAR & LIQ.ID - Contratto III soglia",
     "Region": "6716",
     "emailRV": "",
@@ -816,16 +816,16 @@
     "ObbligoStima": "TRUE"
   },
   {
-    "CodFornitore": "6701",
-    "RagioneSocialeFornitore": "Heineken Italia S.p.A.",
+    "CodFornitore": "IT50",
+    "RagioneSocialeFornitore": "Partesa S.r.l.",
     "TipologiaIntervento": "DOUBLE DUTCH - altro (descrivere nel campo note)",
     "Region": "6771",
     "emailRV": "",
     "ObbligoStima": "TRUE"
   },
   {
-    "CodFornitore": "6701",
-    "RagioneSocialeFornitore": "Heineken Italia S.p.A.",
+    "CodFornitore": "IT50",
+    "RagioneSocialeFornitore": "Partesa S.r.l.",
     "TipologiaIntervento": "DOUBLE DUTCH - PdV nuovi [>300 colli/anno] -> €250/€500 ",
     "Region": "6771",
     "emailRV": "",
@@ -840,16 +840,16 @@
     "ObbligoStima": "TRUE"
   },
   {
-    "CodFornitore": "6701",
-    "RagioneSocialeFornitore": "Heineken Italia S.p.A.",
+    "CodFornitore": "IT50",
+    "RagioneSocialeFornitore": "Partesa S.r.l.",
     "TipologiaIntervento": "LIQ.ID - Contratto I soglia solo LIQ.ID",
     "Region": "6771",
     "emailRV": "",
     "ObbligoStima": "TRUE"
   },
   {
-    "CodFornitore": "6701",
-    "RagioneSocialeFornitore": "Heineken Italia S.p.A.",
+    "CodFornitore": "IT50",
+    "RagioneSocialeFornitore": "Partesa S.r.l.",
     "TipologiaIntervento": "LIQ.ID - Contratto II soglia solo LIQ.ID",
     "Region": "6771",
     "emailRV": "",
@@ -1064,24 +1064,24 @@
     "ObbligoStima": "TRUE"
   },
   {
-    "CodFornitore": "6700201553",
-    "RagioneSocialeFornitore": "Tek Bar S.R.L.",
+    "CodFornitore": "IT50",
+    "RagioneSocialeFornitore": "Partesa S.r.l.",
     "TipologiaIntervento": "TEK BAR & LIQ.ID - Contratto I soglia",
     "Region": "6771",
     "emailRV": "",
     "ObbligoStima": "TRUE"
   },
   {
-    "CodFornitore": "6700201553",
-    "RagioneSocialeFornitore": "Tek Bar S.R.L.",
+    "CodFornitore": "IT50",
+    "RagioneSocialeFornitore": "Partesa S.r.l.",
     "TipologiaIntervento": "TEK BAR & LIQ.ID - Contratto II soglia",
     "Region": "6771",
     "emailRV": "",
     "ObbligoStima": "TRUE"
   },
   {
-    "CodFornitore": "6700201553",
-    "RagioneSocialeFornitore": "Tek Bar S.R.L.",
+    "CodFornitore": "IT50",
+    "RagioneSocialeFornitore": "Partesa S.r.l.",
     "TipologiaIntervento": "TEK BAR & LIQ.ID - Contratto III soglia",
     "Region": "6771",
     "emailRV": "",
@@ -1392,16 +1392,16 @@
     "ObbligoStima": "TRUE"
   },
   {
-    "CodFornitore": "na",
-    "RagioneSocialeFornitore": "Partesa",
+    "CodFornitore": "IT50",
+    "RagioneSocialeFornitore": "Partesa S.r.l.",
     "TipologiaIntervento": "DOUBLE DUTCH - altro (descrivere nel campo note)",
     "Region": "6734",
     "emailRV": "",
     "ObbligoStima": "TRUE"
   },
   {
-    "CodFornitore": "na",
-    "RagioneSocialeFornitore": "Partesa",
+    "CodFornitore": "IT50",
+    "RagioneSocialeFornitore": "Partesa S.r.l.",
     "TipologiaIntervento": "DOUBLE DUTCH - PdV nuovi [>300 colli/anno] -> €250/€500 ",
     "Region": "6734",
     "emailRV": "",
@@ -1416,16 +1416,16 @@
     "ObbligoStima": "TRUE"
   },
   {
-    "CodFornitore": "na",
-    "RagioneSocialeFornitore": "Partesa",
+    "CodFornitore": "IT50",
+    "RagioneSocialeFornitore": "Partesa S.r.l.",
     "TipologiaIntervento": "LIQ.ID - Contratto I soglia solo LIQ.ID",
     "Region": "6734",
     "emailRV": "",
     "ObbligoStima": "TRUE"
   },
   {
-    "CodFornitore": "na",
-    "RagioneSocialeFornitore": "Partesa",
+    "CodFornitore": "IT50",
+    "RagioneSocialeFornitore": "Partesa S.r.l.",
     "TipologiaIntervento": "LIQ.ID - Contratto II soglia solo LIQ.ID",
     "Region": "6734",
     "emailRV": "",
@@ -1632,24 +1632,24 @@
     "ObbligoStima": "TRUE"
   },
   {
-    "CodFornitore": "6700201553",
-    "RagioneSocialeFornitore": "Tek Bar S.R.L.",
+    "CodFornitore": "IT50",
+    "RagioneSocialeFornitore": "Partesa S.r.l.",
     "TipologiaIntervento": "TEK BAR & LIQ.ID - Contratto I soglia",
     "Region": "6734",
     "emailRV": "",
     "ObbligoStima": "TRUE"
   },
   {
-    "CodFornitore": "6700201553",
-    "RagioneSocialeFornitore": "Tek Bar S.R.L.",
+    "CodFornitore": "IT50",
+    "RagioneSocialeFornitore": "Partesa S.r.l.",
     "TipologiaIntervento": "TEK BAR & LIQ.ID - Contratto II soglia",
     "Region": "6734",
     "emailRV": "",
     "ObbligoStima": "TRUE"
   },
   {
-    "CodFornitore": "6700201553",
-    "RagioneSocialeFornitore": "Tek Bar S.R.L.",
+    "CodFornitore": "IT50",
+    "RagioneSocialeFornitore": "Partesa S.r.l.",
     "TipologiaIntervento": "TEK BAR & LIQ.ID - Contratto III soglia",
     "Region": "6734",
     "emailRV": "",
