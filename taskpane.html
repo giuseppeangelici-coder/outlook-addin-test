@@ -1,30 +1,24 @@
 <!-- 
   ADD-IN RICHIESTE RV - TASKPANE COMPONENT
-  Version: 2.3.3 - Fase B (in test)
+  Version: 2.3.4 - Fase B (in test)
   Date: 2026-07-26
   Changes:
-    - FIX: pulsante "Pulisci Form" che non rispondeva al click in alcuni host degli
-      Add-in di Outlook: rimossa la dipendenza da window.confirm() (non affidabile in
-      diversi WebView), sostituita con una conferma a doppio click gestita internamente.
-    - Con "Tipo di Richiesta" non selezionato, l'intero corpo del modulo (cliente,
-      fornitore, tipologia, periodo validità, dati economici, note, pulsanti) è ora
-      racchiuso in #corpoForm e resta nascosto finché non si sceglie un percorso:
-      il pannello appare vuoto, senza menu né pulsanti, coerentemente col resto della
-      logica "niente percorso, niente sezioni condizionate".
-    - Percorso standard: la sezione "Stima" ora richiede sia Tipo Importo = "Fisso" sia
-      ObbligoStima = true sulla Tipologia scelta (prima bastava solo ObbligoStima).
-    - Tipo Importo = "Variabile": i campi economici si riducono a due, nascondendo
-      "Importo Extra Non Coperto" (concetto non applicabile) e rendendo "Importo
-      contributo fornitore" sola lettura, sincronizzato automaticamente su "Importo da
-      liquidare al cliente".
-    - Cambiando la Tipologia Intervento (una tipologia diversa da quella già selezionata)
-      si ripuliscono automaticamente Periodo Validità, Quantità Stima/UDM, Tipo Importo
-      e importi, Note; Cliente, Gruppo e Fornitore restano invariati perché a monte della
-      Tipologia. La riselezione della stessa Tipologia (es. via risoluzione al blur) non
-      innesca il reset.
+    - Tipo Importo = "Variabile" (percorso standard): sostituita la precedente
+      sincronizzazione Reintegrato/Liquidare con un campo dedicato, disponibile solo per
+      questo scenario, "Importo Stimato Contributo a Fine Periodo": copertura ed
+      erogazione avvengono infatti solo a fine periodo di maturazione (generalmente fine
+      anno), non subito come nel regime "Fisso". I campi "Importo contributo fornitore",
+      "Importo da liquidare al cliente" ed "Importo Extra Non Coperto" restano visibili
+      solo con Tipo Importo = "Fisso".
+    - Con Tipo Importo = "Variabile" la mail non va più in CC a
+      contratti.clienti@partesa.it, perché in questo scenario non c'è nulla da erogare
+      subito (avverrà solo a fine periodo di maturazione).
   Changelog precedente:
-    - v2.3.2: fix "Tipo di Richiesta" vuoto che lasciava visibile il pannello economico
-      standard perché isStandard trattava il percorso vuoto come "standard".
+    - v2.3.3: fix pulsante "Pulisci Form" (rimossa dipendenza da window.confirm());
+      pannello vuoto senza menu/pulsanti quando "Tipo di Richiesta" non è selezionato
+      (nuovo wrapper #corpoForm); sezione "Stima" condizionata anche a Tipo Importo =
+      "Fisso"; cambio Tipologia Intervento ripulisce i campi dipendenti (esclusi
+      Cliente, Gruppo, Fornitore).
     - v2.3.1: fix resetForm() ("Pulisci Form") che non nascondeva/svuotava le sotto-sezioni
       Periodo Validità (Annuale/Pluriennale/Spot), rimaste visibili con i vecchi dati dopo
       il reset perché legate all'evento "change" mai generato da .value = "".
@@ -298,14 +292,24 @@
         <option value="Variabile">Variabile</option>
       </select>
 
-      <label for="importoReintegrato">Importo contributo fornitore (€)</label>
-      <input type="number" id="importoReintegrato" step="0.01" min="0.01" placeholder="Valore maggiore di 0..." disabled>
+      <div id="datiImportoFisso">
+        <label for="importoReintegrato">Importo contributo fornitore (€)</label>
+        <input type="number" id="importoReintegrato" step="0.01" min="0.01" placeholder="Valore maggiore di 0..." disabled>
 
-      <label for="importoLiquidare">Importo da liquidare al cliente (€)</label>
-      <input type="number" id="importoLiquidare" step="0.01" min="0" placeholder="Inserire 0 oppure un valore maggiore di 0..." disabled>
+        <label for="importoLiquidare">Importo da liquidare al cliente (€)</label>
+        <input type="number" id="importoLiquidare" step="0.01" min="0" placeholder="Inserire 0 oppure un valore maggiore di 0..." disabled>
 
-      <label for="importoExtra" id="labelImportoExtra">Importo Extra Non Coperto (€)</label>
-      <input type="text" id="importoExtra" placeholder="Calcolato automaticamente..." readonly style="background: #f3f3f3; font-weight: bold; color: #d83b01;">
+        <label for="importoExtra" id="labelImportoExtra">Importo Extra Non Coperto (€)</label>
+        <input type="text" id="importoExtra" placeholder="Calcolato automaticamente..." readonly style="background: #f3f3f3; font-weight: bold; color: #d83b01;">
+      </div>
+    </div>
+
+    <!-- Disponibile solo con Tipo Importo = "Variabile": copertura ed erogazione
+         avverranno a fine periodo di maturazione (generalmente fine anno), quindi non si
+         chiedono qui gli importi da liquidare/reintegrare, ma solo una stima. -->
+    <div id="pannelloImportoVariabile" style="display: none;">
+      <label for="importoStimatoVariabile" style="margin-top: 0;">Importo Stimato Contributo a Fine Periodo (€)</label>
+      <input type="number" id="importoStimatoVariabile" step="0.01" min="0.01" placeholder="Valore stimato: copertura ed erogazione avverranno a fine periodo di maturazione..." disabled>
     </div>
 
     <div id="pannelloImportoFuoriBinario" style="display: none;">
@@ -327,11 +331,11 @@
   <div id="log">Log eventi...</div>
 
   <footer class="app-footer">
-    <span>Versione: v2.3.3 - Fase B (in test)</span>
+    <span>Versione: v2.3.4 - Fase B (in test)</span>
   </footer>
 
   <script>
-    const APP_VERSION = "Versione: v2.3.3 - Fase B (in test)";
+    const APP_VERSION = "Versione: v2.3.4 - Fase B (in test)";
     const POWER_AUTOMATE_URL = "https://default66e853deece344dd9d66ee6bdf4159.d4.environment.api.powerplatform.com/powerautomate/automations/direct/workflows/465577c70a414425a1f278e3c3f2bb43/triggers/manual/paths/invoke?api-version=1";
 
     const DEBUG_MODE = false;
@@ -434,12 +438,10 @@
 
       // Reset campi economici
       document.getElementById("tipoImporto").value = "Fisso";
-      document.getElementById("importoReintegrato").readOnly = false;
       document.getElementById("importoReintegrato").value = "";
       document.getElementById("importoLiquidare").value = "";
       document.getElementById("importoExtra").value = "";
-      document.getElementById("importoExtra").style.display = "";
-      document.getElementById("labelImportoExtra").style.display = "";
+      document.getElementById("importoStimatoVariabile").value = "";
       document.getElementById("importoFuoriBinario").value = "";
       document.getElementById("noteIntervento").value = "";
 
@@ -686,9 +688,12 @@
       const sezioneStima = document.getElementById("sezioneStima");
       const pannelloImporti = document.getElementById("pannelloImporti");
       const tipoImporto = document.getElementById("tipoImporto");
+      const datiImportoFisso = document.getElementById("datiImportoFisso");
       const importoReintegrato = document.getElementById("importoReintegrato");
       const importoLiquidare = document.getElementById("importoLiquidare");
       const importoExtra = document.getElementById("importoExtra");
+      const pannelloImportoVariabile = document.getElementById("pannelloImportoVariabile");
+      const importoStimatoVariabile = document.getElementById("importoStimatoVariabile");
       const pannelloImportoFuoriBinario = document.getElementById("pannelloImportoFuoriBinario");
       const labelImportoFuoriBinario = document.getElementById("labelImportoFuoriBinario");
       const importoFuoriBinario = document.getElementById("importoFuoriBinario");
@@ -987,12 +992,6 @@
       }
 
       function rinfrescaCalcoloExtra() {
-        if (tipoImporto.value === "Variabile") {
-          // Con importo Variabile non esiste il concetto di "extra non coperto": tutto
-          // l'importo liquidato è considerato a copertura del fornitore.
-          importoExtra.value = "";
-          return;
-        }
         const r = parseFloat(importoReintegrato.value);
         const l = parseFloat(importoLiquidare.value);
         if (!isNaN(r) && !isNaN(l) && l > r) {
@@ -1002,22 +1001,25 @@
         }
       }
 
-      // Con Tipo Importo = "Variabile" i campi economici si riducono a due: si nasconde
-      // "Importo Extra Non Coperto" e l'Importo contributo fornitore (Reintegrato) viene
-      // reso sola lettura, sincronizzato automaticamente sull'Importo da liquidare al
-      // cliente. Tornando a "Fisso" i campi tornano tutti indipendenti e modificabili.
+      // Con Tipo Importo = "Variabile" copertura ed erogazione avvengono solo a fine
+      // periodo di maturazione (generalmente fine anno): si nascondono i campi del
+      // regime "Fisso" (Importo contributo fornitore / da liquidare / extra non
+      // coperto, che presuppongono un'erogazione immediata) e si mostra un unico campo
+      // dedicato, "Importo Stimato Contributo a Fine Periodo", disponibile solo in
+      // questo scenario. Tornando a "Fisso" i campi tornano quelli originari.
       function aggiornaModalitaImportoVariabile() {
         const isVariabile = tipoImporto.value === "Variabile";
-        const labelImportoExtra = document.getElementById("labelImportoExtra");
 
-        labelImportoExtra.style.display = isVariabile ? "none" : "";
-        importoExtra.style.display = isVariabile ? "none" : "";
-        importoReintegrato.readOnly = isVariabile;
+        datiImportoFisso.style.display = isVariabile ? "none" : "";
+        pannelloImportoVariabile.style.display = isVariabile ? "block" : "none";
 
         if (isVariabile) {
-          importoReintegrato.value = importoLiquidare.value;
+          importoReintegrato.value = "";
+          importoLiquidare.value = "";
+          importoExtra.value = "";
+        } else {
+          importoStimatoVariabile.value = "";
         }
-        rinfrescaCalcoloExtra();
       }
 
       function setupLogicaEconomica() {
@@ -1028,12 +1030,7 @@
         });
 
         importoReintegrato.addEventListener("input", rinfrescaCalcoloExtra);
-        importoLiquidare.addEventListener("input", () => {
-          if (tipoImporto.value === "Variabile") {
-            importoReintegrato.value = importoLiquidare.value;
-          }
-          rinfrescaCalcoloExtra();
-        });
+        importoLiquidare.addEventListener("input", rinfrescaCalcoloExtra);
       }
 
       function aggiornaPercorsoGuida(percorso) {
@@ -1075,16 +1072,18 @@
           tipoImporto.disabled = true;
           importoReintegrato.disabled = true;
           importoLiquidare.disabled = true;
+          importoStimatoVariabile.disabled = true;
           tipoImporto.value = "Fisso";
-          importoReintegrato.readOnly = false;
           importoReintegrato.value = "";
           importoLiquidare.value = "";
           importoExtra.value = "";
+          importoStimatoVariabile.value = "";
           aggiornaModalitaImportoVariabile();
         } else if (hasCustomer) {
           tipoImporto.disabled = false;
           importoReintegrato.disabled = false;
           importoLiquidare.disabled = false;
+          importoStimatoVariabile.disabled = false;
           aggiornaModalitaImportoVariabile();
         }
 
@@ -1163,10 +1162,10 @@
         unitaMisura.value = "";
 
         tipoImporto.value = "Fisso";
-        importoReintegrato.readOnly = false;
         importoReintegrato.value = "";
         importoLiquidare.value = "";
         importoExtra.value = "";
+        importoStimatoVariabile.value = "";
 
         noteIntervento.value = "";
 
@@ -1812,30 +1811,43 @@
         const stringaDettaglioValidita = risultatoValidita.dettaglio;
 
         const tImporto = tipoImporto.value;
-        const valReintegrato = parseFloat(importoReintegrato.value);
-        const valLiquidare = parseFloat(importoLiquidare.value || "0");
+        const isVariabileSubmit = tImporto === "Variabile";
         const txtNote = noteIntervento.value.trim();
 
-        if (isNaN(valReintegrato) || valReintegrato <= 0) {
-          alert("Errore: L'Importo Reintegrato deve essere compilato e maggiore di 0.");
-          return;
+        let valReintegrato = NaN;
+        let valLiquidare = 0;
+        let valStimatoVariabile = NaN;
+        let txtExtra = "Nessuno";
+
+        if (isVariabileSubmit) {
+          valStimatoVariabile = parseFloat(importoStimatoVariabile.value);
+          if (isNaN(valStimatoVariabile) || valStimatoVariabile <= 0) {
+            alert("Errore: l'Importo Stimato Contributo a Fine Periodo deve essere compilato e maggiore di 0.");
+            return;
+          }
+        } else {
+          valReintegrato = parseFloat(importoReintegrato.value);
+          valLiquidare = parseFloat(importoLiquidare.value || "0");
+          if (isNaN(valReintegrato) || valReintegrato <= 0) {
+            alert("Errore: L'Importo Reintegrato deve essere compilato e maggiore di 0.");
+            return;
+          }
+          if (isNaN(valLiquidare) || valLiquidare < 0) {
+            alert("Errore: l'Importo da Liquidare non può essere negativo.");
+            return;
+          }
+          if (valLiquidare > valReintegrato) {
+            txtExtra = (valLiquidare - valReintegrato).toFixed(2) + " €";
+          }
         }
-        if (isNaN(valLiquidare) || valLiquidare < 0) {
-          alert("Errore: l'Importo da Liquidare non può essere negativo.");
-          return;
-        }
+
         if (tipoValidita === "pluriennale" && txtNote === "") {
           alert("Errore: Per i contratti Pluriennali è obbligatorio specificare la ripartizione economica per anno nel campo Note.");
           return;
         }
-        if (tImporto === "Variabile" && txtNote === "") {
+        if (isVariabileSubmit && txtNote === "") {
           alert("Errore: Il campo Note è obbligatorio quando il tipo di importo è Variabile.");
           return;
-        }
-
-        let txtExtra = "Nessuno";
-        if (valLiquidare > valReintegrato) {
-          txtExtra = (valLiquidare - valReintegrato).toFixed(2) + " €";
         }
 
         const {
@@ -1850,7 +1862,11 @@
 
         const recipients = buildRecipients({
           region: cBu,
-          importoDaLiquidare: valLiquidare,
+          // Con importo Variabile copertura ed erogazione avvengono solo a fine periodo
+          // di maturazione: non va inviata la comunicazione a Contratti, che con questo
+          // scenario non deve erogare nulla ora. Si passa quindi 0 come importo da
+          // liquidare, indipendentemente dal valore stimato inserito.
+          importoDaLiquidare: isVariabileSubmit ? 0 : valLiquidare,
           currentUserEmail: userEmail,
           rsmEmail: cEmailRsm,
           percorso: percorsoSelezionato
@@ -1869,6 +1885,17 @@
         const selectPercorsoElStd = document.getElementById("selectPercorso");
         const percorsoLabelStd = selectPercorsoElStd.options[selectPercorsoElStd.selectedIndex].text;
 
+        const righeEconomicheHtml = isVariabileSubmit
+          ? `
+                <tr><td>Tipo Importo</td><td>${tImporto}</td></tr>
+                <tr><td>Importo Stimato Contributo a Fine Periodo</td><td><b>${valStimatoVariabile.toFixed(2)} €</b></td></tr>
+                <tr><td colspan="2" style="font-size: 11px; color: #7a5300;">Importo stimato: copertura ed erogazione avverranno a fine periodo di maturazione (generalmente fine anno).</td></tr>`
+          : `
+                <tr><td>Tipo Importo</td><td>${tImporto}</td></tr>
+                <tr><td>Importo Reintegrato</td><td>${valReintegrato.toFixed(2)} €</td></tr>
+                <tr><td>Importo da Liquidare</td><td>${valLiquidare.toFixed(2)} €</td></tr>
+                <tr><td>Importo Extra Non Coperto</td><td><span style="color:#d83b01; font-weight:bold;">${txtExtra}</span></td></tr>`;
+
         const htmlBody = `
           <html>
             <body style="font-family: Calibri, sans-serif; font-size: 12px;">
@@ -1884,11 +1911,7 @@
                 <tr><td>Quantità Stima</td><td>${qStimaText}</td></tr>
                 <tr><td>Unità di Misura</td><td>${udmText}</td></tr>
                 <tr><td><b>Periodo Validità</b></td><td><span style="color:#d83b01;"><b>${stringaDettaglioValidita}</b></span></td></tr>
-                <tr style="background-color: #f9f9f9;"><td colspan="2"><b>DETTAGLI ECONOMICI</b></td></tr>
-                <tr><td>Tipo Importo</td><td>${tImporto}</td></tr>
-                <tr><td>Importo Reintegrato</td><td>${valReintegrato.toFixed(2)} €</td></tr>
-                <tr><td>Importo da Liquidare</td><td>${valLiquidare.toFixed(2)} €</td></tr>
-                <tr><td>Importo Extra Non Coperto</td><td><span style="color:#d83b01; font-weight:bold;">${txtExtra}</span></td></tr>
+                <tr style="background-color: #f9f9f9;"><td colspan="2"><b>DETTAGLI ECONOMICI</b></td></tr>${righeEconomicheHtml}
                 <tr><td>Note / Giustificativo Ripartizione</td><td>${txtNote ? txtNote : "Nessuna nota inserita"}</td></tr>
                 <tr style="background-color: #f9f9f9;"><td colspan="2"></td></tr>
                 <tr><td>Venditore</td><td>${cVen}</td></tr>
