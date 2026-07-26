@@ -1,14 +1,30 @@
 <!-- 
   ADD-IN RICHIESTE RV - TASKPANE COMPONENT
-  Version: 2.3.2 - Fase B (in test)
+  Version: 2.3.3 - Fase B (in test)
   Date: 2026-07-26
   Changes:
-    - FIX: con "Tipo di Richiesta" vuoto, il pannello economico standard (Tipo Importo,
-      Importo Reintegrato, ecc.) restava visibile anche se disabilitato, perché isStandard
-      trattava il percorso vuoto come "standard". Ora richiede un match esatto: con nessun
-      percorso scelto, non è visibile nulla di condizionato al percorso, coerentemente con
-      quanto già avveniva per la Tipologia.
+    - FIX: pulsante "Pulisci Form" che non rispondeva al click in alcuni host degli
+      Add-in di Outlook: rimossa la dipendenza da window.confirm() (non affidabile in
+      diversi WebView), sostituita con una conferma a doppio click gestita internamente.
+    - Con "Tipo di Richiesta" non selezionato, l'intero corpo del modulo (cliente,
+      fornitore, tipologia, periodo validità, dati economici, note, pulsanti) è ora
+      racchiuso in #corpoForm e resta nascosto finché non si sceglie un percorso:
+      il pannello appare vuoto, senza menu né pulsanti, coerentemente col resto della
+      logica "niente percorso, niente sezioni condizionate".
+    - Percorso standard: la sezione "Stima" ora richiede sia Tipo Importo = "Fisso" sia
+      ObbligoStima = true sulla Tipologia scelta (prima bastava solo ObbligoStima).
+    - Tipo Importo = "Variabile": i campi economici si riducono a due, nascondendo
+      "Importo Extra Non Coperto" (concetto non applicabile) e rendendo "Importo
+      contributo fornitore" sola lettura, sincronizzato automaticamente su "Importo da
+      liquidare al cliente".
+    - Cambiando la Tipologia Intervento (una tipologia diversa da quella già selezionata)
+      si ripuliscono automaticamente Periodo Validità, Quantità Stima/UDM, Tipo Importo
+      e importi, Note; Cliente, Gruppo e Fornitore restano invariati perché a monte della
+      Tipologia. La riselezione della stessa Tipologia (es. via risoluzione al blur) non
+      innesca il reset.
   Changelog precedente:
+    - v2.3.2: fix "Tipo di Richiesta" vuoto che lasciava visibile il pannello economico
+      standard perché isStandard trattava il percorso vuoto come "standard".
     - v2.3.1: fix resetForm() ("Pulisci Form") che non nascondeva/svuotava le sotto-sezioni
       Periodo Validità (Annuale/Pluriennale/Spot), rimaste visibili con i vecchi dati dopo
       il reset perché legate all'evento "change" mai generato da .value = "".
@@ -116,6 +132,11 @@
     <option value="merce_omaggio">Merce omaggio</option>
   </select>
   <div id="percorsoGuida" class="percorso-guida"></div>
+
+  <!-- Tutto ciò che segue dipende da un Tipo di Richiesta scelto: il wrapper resta
+       nascosto (vedi aggiornaVisibilitaPercorso) finché #selectPercorso è vuoto, così
+       il pannello non mostra menu né pulsanti senza un percorso selezionato. -->
+  <div id="corpoForm" style="display: none;">
 
   <label for="searchCliente">Cerca Cliente (Codice o Ragione Sociale)</label>
   <div class="search-container">
@@ -283,7 +304,7 @@
       <label for="importoLiquidare">Importo da liquidare al cliente (€)</label>
       <input type="number" id="importoLiquidare" step="0.01" min="0" placeholder="Inserire 0 oppure un valore maggiore di 0..." disabled>
 
-      <label for="importoExtra">Importo Extra Non Coperto (€)</label>
+      <label for="importoExtra" id="labelImportoExtra">Importo Extra Non Coperto (€)</label>
       <input type="text" id="importoExtra" placeholder="Calcolato automaticamente..." readonly style="background: #f3f3f3; font-weight: bold; color: #d83b01;">
     </div>
 
@@ -301,14 +322,16 @@
     <button type="button" id="btnReset" class="btn-secondary" onclick="resetForm()">Pulisci Form</button>
   </div>
 
+  </div><!-- /#corpoForm -->
+
   <div id="log">Log eventi...</div>
 
   <footer class="app-footer">
-    <span>Versione: v2.3.2 - Fase B (in test)</span>
+    <span>Versione: v2.3.3 - Fase B (in test)</span>
   </footer>
 
   <script>
-    const APP_VERSION = "Versione: v2.3.2 - Fase B (in test)";
+    const APP_VERSION = "Versione: v2.3.3 - Fase B (in test)";
     const POWER_AUTOMATE_URL = "https://default66e853deece344dd9d66ee6bdf4159.d4.environment.api.powerplatform.com/powerautomate/automations/direct/workflows/465577c70a414425a1f278e3c3f2bb43/triggers/manual/paths/invoke?api-version=1";
 
     const DEBUG_MODE = false;
@@ -374,10 +397,30 @@
     const flowStatusMessage = document.getElementById("flowStatusMessage");
     logElement.style.display = DEBUG_MODE ? "block" : "none";
 
+    let resetConfirmPending = false;
+    let resetConfirmTimeout = null;
+
     function resetForm() {
-      if (!confirm("Sei sicuro di voler pulire tutti i campi del modulo?")) {
+      const btnReset = document.getElementById("btnReset");
+
+      // window.confirm() non è affidabile in tutti gli host degli Add-in di Outlook: in
+      // alcuni casi la finestra nativa viene bloccata o ignorata dal WebView e il click
+      // sembra "non fare nulla". Si usa quindi una conferma a due click gestita
+      // internamente: il primo click arma la conferma cambiando il testo del pulsante,
+      // il secondo click (entro pochi secondi) esegue davvero la pulizia.
+      if (!resetConfirmPending) {
+        resetConfirmPending = true;
+        btnReset.textContent = "Confermi? Clicca di nuovo per pulire";
+        resetConfirmTimeout = window.setTimeout(() => {
+          resetConfirmPending = false;
+          btnReset.textContent = "Pulisci Form";
+        }, 4000);
         return;
       }
+
+      window.clearTimeout(resetConfirmTimeout);
+      resetConfirmPending = false;
+      btnReset.textContent = "Pulisci Form";
 
       // Reset campi di testo/selezione principali
       selectedCustomer = null;
@@ -391,9 +434,12 @@
 
       // Reset campi economici
       document.getElementById("tipoImporto").value = "Fisso";
+      document.getElementById("importoReintegrato").readOnly = false;
       document.getElementById("importoReintegrato").value = "";
       document.getElementById("importoLiquidare").value = "";
       document.getElementById("importoExtra").value = "";
+      document.getElementById("importoExtra").style.display = "";
+      document.getElementById("labelImportoExtra").style.display = "";
       document.getElementById("importoFuoriBinario").value = "";
       document.getElementById("noteIntervento").value = "";
 
@@ -405,7 +451,9 @@
         document.getElementById(`qtaArticolo${i}`).value = "";
       }
 
-      // Ripristina percorso a vuoto o standard
+      // Ripristina percorso a vuoto: aggiornaVisibilitaPercorso() (chiamata più sotto)
+      // nasconde di nuovo #corpoForm, riportando il pannello allo stato vuoto richiesto
+      // finché non si sceglie un nuovo Tipo di Richiesta.
       const selectPercorso = document.getElementById("selectPercorso");
       selectPercorso.value = "";
 
@@ -858,9 +906,12 @@
 
       // Sostituisce la vecchia logica pilotata dal Budget: l'ObbligoStima ora si legge
       // direttamente dalla riga di Tipologia abbinata (fornitore + region + eventuale RV).
+      // La sezione "Stima" è visibile solo nel percorso standard, con una Tipologia
+      // selezionata che la richiede (ObbligoStima) E con Tipo Importo = "Fisso": con
+      // importo Variabile la quantità stimata non viene richiesta.
       function aggiornaVisibilitaObbligoStima() {
         const percorso = document.getElementById("selectPercorso").value;
-        if (percorso !== PERCORSO_RICHIESTA.standard || !selectedTipologia) {
+        if (percorso !== PERCORSO_RICHIESTA.standard || !selectedTipologia || tipoImporto.value !== "Fisso") {
           sezioneStima.style.display = "none";
           quantitaStima.required = false;
           unitaMisura.required = false;
@@ -935,23 +986,54 @@
         annoAnnuale.addEventListener("change", allineaVincoliAnnoAnnuale);
       }
 
+      function rinfrescaCalcoloExtra() {
+        if (tipoImporto.value === "Variabile") {
+          // Con importo Variabile non esiste il concetto di "extra non coperto": tutto
+          // l'importo liquidato è considerato a copertura del fornitore.
+          importoExtra.value = "";
+          return;
+        }
+        const r = parseFloat(importoReintegrato.value);
+        const l = parseFloat(importoLiquidare.value);
+        if (!isNaN(r) && !isNaN(l) && l > r) {
+          importoExtra.value = (l - r).toFixed(2) + " €";
+        } else {
+          importoExtra.value = "";
+        }
+      }
+
+      // Con Tipo Importo = "Variabile" i campi economici si riducono a due: si nasconde
+      // "Importo Extra Non Coperto" e l'Importo contributo fornitore (Reintegrato) viene
+      // reso sola lettura, sincronizzato automaticamente sull'Importo da liquidare al
+      // cliente. Tornando a "Fisso" i campi tornano tutti indipendenti e modificabili.
+      function aggiornaModalitaImportoVariabile() {
+        const isVariabile = tipoImporto.value === "Variabile";
+        const labelImportoExtra = document.getElementById("labelImportoExtra");
+
+        labelImportoExtra.style.display = isVariabile ? "none" : "";
+        importoExtra.style.display = isVariabile ? "none" : "";
+        importoReintegrato.readOnly = isVariabile;
+
+        if (isVariabile) {
+          importoReintegrato.value = importoLiquidare.value;
+        }
+        rinfrescaCalcoloExtra();
+      }
+
       function setupLogicaEconomica() {
         tipoImporto.addEventListener("change", () => {
           rinfrescaObbligatorietaNote();
+          aggiornaModalitaImportoVariabile();
+          aggiornaVisibilitaObbligoStima();
         });
 
-        function rinfrescaCalcoloExtra() {
-          const r = parseFloat(importoReintegrato.value);
-          const l = parseFloat(importoLiquidare.value);
-          if (!isNaN(r) && !isNaN(l) && l > r) {
-            importoExtra.value = (l - r).toFixed(2) + " €";
-          } else {
-            importoExtra.value = "";
-          }
-        }
-
         importoReintegrato.addEventListener("input", rinfrescaCalcoloExtra);
-        importoLiquidare.addEventListener("input", rinfrescaCalcoloExtra);
+        importoLiquidare.addEventListener("input", () => {
+          if (tipoImporto.value === "Variabile") {
+            importoReintegrato.value = importoLiquidare.value;
+          }
+          rinfrescaCalcoloExtra();
+        });
       }
 
       function aggiornaPercorsoGuida(percorso) {
@@ -973,6 +1055,11 @@
         const isMerceOmaggio = percorso === PERCORSO_RICHIESTA.merceOmaggio;
         const hasCustomer = !!selectedCustomer;
 
+        // Con "Tipo di Richiesta" vuoto il resto del pannello (cliente, fornitore,
+        // tipologia, periodo validità, sezioni condizionate, dati economici, note e
+        // pulsanti) resta completamente nascosto.
+        document.getElementById("corpoForm").style.display = percorso ? "block" : "none";
+
         aggiornaPercorsoGuida(percorso);
 
         // Fornitore: obbligatorio in tutti e tre i percorsi, sempre abilitato se c'è un cliente
@@ -988,13 +1075,17 @@
           tipoImporto.disabled = true;
           importoReintegrato.disabled = true;
           importoLiquidare.disabled = true;
+          tipoImporto.value = "Fisso";
+          importoReintegrato.readOnly = false;
           importoReintegrato.value = "";
           importoLiquidare.value = "";
           importoExtra.value = "";
+          aggiornaModalitaImportoVariabile();
         } else if (hasCustomer) {
           tipoImporto.disabled = false;
           importoReintegrato.disabled = false;
           importoLiquidare.disabled = false;
+          aggiornaModalitaImportoVariabile();
         }
 
         // Pannello Importo Fuori Binario: mostrato solo per "Investimento a carico Partesa"
@@ -1048,9 +1139,50 @@
         });
       }
 
+      // Cambiando davvero Tipologia (non solo riconfermando quella già selezionata, ad
+      // es. dopo il blur del campo) tutti i campi dipendenti a valle vanno ripuliti:
+      // Periodo Validità, Quantità Stima/UDM, Tipo Importo e importi, Note. Cliente,
+      // Gruppo e Fornitore restano invariati perché sono a monte della Tipologia.
+      function pulisciCampiDipendentiDaTipologia() {
+        selectValidita.value = "";
+        ["sezAnnuale", "sezPluriennale", "sezSpot"].forEach(id => {
+          document.getElementById(id).style.display = "none";
+        });
+        dataInizioAnnuale.value = "";
+        dataInizioAnnuale.required = false;
+        dataFineAnnuale.value = "";
+        dataFineAnnuale.required = false;
+        meseInizioPluri.value = "";
+        meseInizioPluri.required = false;
+        annoFinePluri.value = "";
+        annoFinePluri.required = false;
+        meseSpot.value = "";
+        meseSpot.required = false;
+
+        quantitaStima.value = "";
+        unitaMisura.value = "";
+
+        tipoImporto.value = "Fisso";
+        importoReintegrato.readOnly = false;
+        importoReintegrato.value = "";
+        importoLiquidare.value = "";
+        importoExtra.value = "";
+
+        noteIntervento.value = "";
+
+        rinfrescaObbligatorietaNote();
+        aggiornaModalitaImportoVariabile();
+
+        log("Tipologia cambiata: campi dipendenti ripuliti (esclusi Cliente, Gruppo, Fornitore).");
+      }
+
       function selezionaTipologia(item) {
         const targetCodice = String(item.CodFornitore || "").trim();
         const targetTipologia = String(item.TipologiaIntervento || "").trim();
+
+        const tipologiaCambiata = !selectedTipologia ||
+          String(selectedTipologia.CodFornitore || "").trim() !== targetCodice ||
+          String(selectedTipologia.TipologiaIntervento || "").trim() !== targetTipologia;
 
         const fornitoreMatch = fornitoriDb.find(f => String(f.CodFornitore || "").trim() === targetCodice);
         if (fornitoreMatch) {
@@ -1070,6 +1202,11 @@
         suggestionsTipologia.innerHTML = "";
         suggestionsTipologia.style.display = "none";
         highlightedIndexTipologia = -1;
+
+        if (tipologiaCambiata) {
+          pulisciCampiDipendentiDaTipologia();
+        }
+
         aggiornaVisibilitaObbligoStima();
       }
 
