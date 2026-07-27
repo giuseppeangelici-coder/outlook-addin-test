@@ -1,6 +1,6 @@
 <!-- 
   ADD-IN RICHIESTE RV - TASKPANE COMPONENT
-  Version: 2.3.4 - Fase B (in test)
+  Version: 2.3.5 - Fase B (in test)
   Date: 2026-07-26
   Changes:
     - Tipo Importo = "Variabile" (percorso standard): sostituita la precedente
@@ -111,6 +111,23 @@
     font-size: 10px;
     color: #888888;
   }
+
+  body.maintenance-mode { padding: 0; }
+  .maintenance-wrap {
+    max-width: 320px;
+    margin: 48px auto 0 auto;
+    padding: 28px 20px;
+    text-align: center;
+    font-family: 'Segoe UI', sans-serif;
+  }
+  .maintenance-icon { font-size: 36px; margin-bottom: 14px; }
+  .maintenance-title { font-size: 16px; font-weight: 600; margin: 0 0 10px 0; color: #201f1e; }
+  .maintenance-wrap p { font-size: 12px; line-height: 1.5; margin: 0 0 10px 0; color: #605e5c; }
+  .maintenance-status {
+    display: inline-block; margin-top: 6px; padding: 5px 12px; border-radius: 12px;
+    background-color: #fff4ce; color: #8a6d00; font-size: 11px; font-weight: 600;
+  }
+  .maintenance-footer { margin-top: 20px; font-size: 10px; color: #a19f9d; }
 </style>
 </head>
 <body>
@@ -331,14 +348,31 @@
   <div id="log">Log eventi...</div>
 
   <footer class="app-footer">
-    <span>Versione: v2.3.4 - Fase B (in test)</span>
+    <span>Versione: v2.3.5 - Fase B (in test)</span>
   </footer>
 
   <script>
-    const APP_VERSION = "Versione: v2.3.4 - Fase B (in test)";
+    const APP_VERSION = "Versione: v2.3.5 - Fase B (in test)";
     const POWER_AUTOMATE_URL = "https://default66e853deece344dd9d66ee6bdf4159.d4.environment.api.powerplatform.com/powerautomate/automations/direct/workflows/465577c70a414425a1f278e3c3f2bb43/triggers/manual/paths/invoke?api-version=1";
 
     const DEBUG_MODE = false;
+
+    // Whitelist per il rilascio in test: solo questi utenti vedono il taskpane operativo,
+    // gli altri vedono la pagina di manutenzione. Da rimuovere a rilascio definitivo.
+    const MAINTENANCE_WHITELIST = [
+      "g.angelici@partesa.it",
+      "f.corinti@partesa.it",
+      "p.lorussi@partesa.it",
+      "p.gualtieri@partesa.it",
+      "e.simonella@partesa.it"
+    ];
+
+    // Override locale ai superuser globali (letti da emailPORTFOLIO.json): estende
+    // la visibilità dati completa anche a chi non è ancora presente in quel file.
+    // Non influisce sui destinatari delle email di richiesta RV (vedi PORTFOLIO_CC_RECIPIENTS).
+    const LOCAL_SUPERUSER_OVERRIDE = [
+      "e.simonella@partesa.it"
+    ];
 
     const PERCORSO_RICHIESTA = {
       standard: "standard",
@@ -669,6 +703,19 @@
       return EMAIL_ADDRESS_REGEX.test(email) ? email : "";
     }
 
+    function showMaintenancePage() {
+      document.body.classList.add("maintenance-mode");
+      document.body.innerHTML = `
+        <div class="maintenance-wrap">
+          <div class="maintenance-icon">🛠️</div>
+          <h2 class="maintenance-title">Strumento in aggiornamento</h2>
+          <p>Stiamo completando gli ultimi affinamenti prima del rilascio definitivo. Il taskpane sarà di nuovo disponibile a breve.</p>
+          <p>Nessuna azione è richiesta da parte tua: ti avviseremo non appena la versione aggiornata sarà pronta all'uso.</p>
+          <span class="maintenance-status">In manutenzione</span>
+          <div class="maintenance-footer">Portfolio Office &middot; Partesa</div>
+        </div>`;
+    }
+
     Office.onReady(async (info) => {
       const params = new URLSearchParams(window.location.search);
       const mode = params.get("mode") || "general";
@@ -715,6 +762,11 @@
       userEmail = getOfficeUserEmail();
       if (!userEmail) {
         blockFlow("Impossibile identificare l’utente Office. Il flusso è stato disabilitato: ricaricare l’add-in o contattare il supporto.");
+        return;
+      }
+
+      if (!MAINTENANCE_WHITELIST.includes(userEmail)) {
+        showMaintenancePage();
         return;
       }
 
@@ -819,7 +871,8 @@
 
       function applyRowLevelSecurity(email, portfolioList, rsmList) {
         const cleanEmail = email.toLowerCase().trim();
-        const superUsersGlobal = portfolioList.map(u => (u.email || "").toLowerCase().trim());
+        const superUsersGlobal = portfolioList.map(u => (u.email || "").toLowerCase().trim())
+          .concat(LOCAL_SUPERUSER_OVERRIDE);
         const rsmUsers = rsmList.map(u => (u.email || "").toLowerCase().trim());
 
         if (superUsersGlobal.includes(cleanEmail)) {
