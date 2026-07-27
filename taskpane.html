@@ -1535,7 +1535,8 @@
         document.getElementById("selectPercorso").disabled = false;
         aggiornaModalitaTipologia();
       } catch (err) {
-        blockFlow("Errore caricamento dati: " + err.message);
+        log("Errore caricamento dati (utente in whitelist, JSON non raggiungibili): " + err.message);
+        showMaintenancePage();
       }
 
       // Consolidamento: la validazione del Periodo Validità era duplicata quasi identica nei due
