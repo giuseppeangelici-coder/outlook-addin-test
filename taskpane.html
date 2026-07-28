@@ -28,6 +28,19 @@
       due chiavi manca (utile in fase di test-coppia con la modifica lato Power
       Automate). Propedeutico alla cifratura di QryCustomerMaster (fase successiva):
       cifrare la struttura definitiva del payload evita di doverla rifare due volte.
+    - Rimosso LOCAL_SUPERUSER_OVERRIDE (override manuale hardcoded, e.simonella):
+      portfolioSuperusers arriva ora dalla tabella reale emailPORTFOLIO (confluita nel
+      payload di QryCustomerMaster) ed è l'unica fonte per i superuser globali, senza
+      più un secondo elenco parallelo da mantenere allineato a mano.
+    - GATE passphrase + decrittazione QryCustomerMaster: il file è ora pubblicato
+      cifrato (AES-256-GCM) da una pipeline GitHub Actions lato server. Al primo
+      avvio il taskpane richiede una passphrase, deriva la chiave via PBKDF2-SHA256
+      (stesso salt/iterazioni dello script encrypt.js lato server, vedi commento),
+      verifica la chiave decifrando realmente il file (AES-GCM è autenticato: una
+      passphrase sbagliata fallisce in modo esplicito, non produce dati corrotti
+      silenziosi), poi persiste la chiave (non la passphrase) in localStorage. Se in
+      futuro la passphrase ruota e la chiave persistita non decifra più, il gate si
+      ripropone automaticamente senza intervento manuale.
   Changelog precedente:
     - v3.1.0: Sequenzialità Fornitore -> Tipologia; riordino menu Periodo Validità;
       rimosso "Tipo Importo" e sostituito da campo unico "Reintegro Fornitore" derivato
@@ -172,6 +185,10 @@
     background: none; border: none; color: #0078d4; text-decoration: underline;
     cursor: pointer; font-size: 10px; padding: 0; margin: 0; width: auto;
   }
+  #inputPassphrase {
+    width: 100%; box-sizing: border-box; padding: 6px; margin-top: 6px;
+    font-size: 13px; border: 1px solid #ccc; border-radius: 2px;
+  }
 </style>
 </head>
 <body>
@@ -185,6 +202,15 @@
     <input type="file" id="inputFileFornitoriTipologie" accept=".json,application/json" />
     <button type="button" id="btnCaricaFT" style="margin-top:12px;">Carica file</button>
     <div id="ftGateError" class="ft-gate-error"></div>
+  </div>
+
+  <!-- GATE: sblocco QryCustomerMaster tramite passphrase (dato cifrato, v3.2.0) -->
+  <div id="gatePassphrase" class="ft-gate-wrap ft-gate-hidden">
+    <h3>Inserisci il codice di sblocco</h3>
+    <p id="passphraseGateMessage">Per usare il modulo devi inserire il codice di sblocco ricevuto. Va fatto una sola volta: da qui in poi il taskpane lo ricorderà automaticamente.</p>
+    <input type="text" id="inputPassphrase" placeholder="Codice di sblocco" autocomplete="off" />
+    <button type="button" id="btnSbloccaPassphrase" style="margin-top:12px;">Sblocca</button>
+    <div id="passphraseGateError" class="ft-gate-error"></div>
   </div>
 
   <!-- 0. PERCORSO RICHIESTA -->
@@ -414,12 +440,12 @@
       "e.simonella@partesa.it"
     ];
 
-    // Override locale ai superuser globali (letti da emailPORTFOLIO.json): estende
-    // la visibilità dati completa anche a chi non è ancora presente in quel file.
-    // Non influisce sui destinatari delle email di richiesta RV (vedi PORTFOLIO_CC_RECIPIENTS).
-    const LOCAL_SUPERUSER_OVERRIDE = [
-      "e.simonella@partesa.it"
-    ];
+    // NOTA: rimosso LOCAL_SUPERUSER_OVERRIDE (v3.2.0). Era un override manuale
+    // (e.simonella@partesa.it) usato quando emailPORTFOLIO.json era ancora incompleto.
+    // Ora portfolioSuperusers arriva dalla tabella reale emailPORTFOLIO (confluita nel
+    // payload di QryCustomerMaster), che include già tutti i superuser effettivi:
+    // l'override manuale non serve più ed è stato eliminato per evitare un secondo
+    // elenco parallelo da mantenere allineato a mano.
 
     const PERCORSO_RICHIESTA = {
       standard: "standard",
@@ -473,6 +499,8 @@
 
     let fullDatabase = [];
     let filteredDatabase = [];
+    let chiaveDecrittazione = null; // CryptoKey per AES-GCM, importata da localStorage o derivata dalla passphrase
+    const urlClienti = "https://giuseppeangelici-coder.github.io/outlook-addin-test/QryCustomerMaster.json";
     let fornitoreTipologiaDb = [];
     let fornitoriDb = [];
     let selectedCustomer = null;
@@ -855,6 +883,111 @@
       }
     }
 
+    // ─────────────────────────────────────────────────────────
+    // GATE: sblocco QryCustomerMaster tramite passphrase (v3.2.0).
+    // QryCustomerMaster.json è pubblicato cifrato (AES-256-GCM) da una pipeline
+    // GitHub Actions lato server. Questi parametri devono essere IDENTICI, bit
+    // per bit, a quelli usati in encrypt.js lato server — vedi commento lì.
+    // ─────────────────────────────────────────────────────────
+    const KDF_SALT = "Partesa-QryCustomerMaster-Salt-v1";
+    const KDF_ITERATIONS = 100000;
+    const LS_KEY_CHIAVE_DECRITTAZIONE = "qryCustomerMasterKeyRaw";
+
+    async function derivaChiaveDaPassphrase(passphrase) {
+      const encoder = new TextEncoder();
+      const baseKey = await crypto.subtle.importKey(
+        "raw", encoder.encode(passphrase), "PBKDF2", false, ["deriveKey"]
+      );
+      return crypto.subtle.deriveKey(
+        { name: "PBKDF2", salt: encoder.encode(KDF_SALT), iterations: KDF_ITERATIONS, hash: "SHA-256" },
+        baseKey,
+        { name: "AES-GCM", length: 256 },
+        true, // extractable: serve per poterla esportare e persistere in localStorage
+        ["decrypt"]
+      );
+    }
+
+    function base64ToBytes(base64) {
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return bytes;
+    }
+
+    function bytesToBase64(bytes) {
+      let binary = "";
+      bytes.forEach(b => binary += String.fromCharCode(b));
+      return btoa(binary);
+    }
+
+    async function decifraQryCustomerMaster(payloadCifrato, key) {
+      const iv = base64ToBytes(payloadCifrato.iv);
+      const data = base64ToBytes(payloadCifrato.data);
+      const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, data);
+      return JSON.parse(new TextDecoder().decode(decrypted));
+    }
+
+    async function leggiChiaveDecrittazioneLocale() {
+      try {
+        const raw = localStorage.getItem(LS_KEY_CHIAVE_DECRITTAZIONE);
+        if (!raw) return null;
+        const keyBytes = base64ToBytes(raw);
+        return await crypto.subtle.importKey("raw", keyBytes, "AES-GCM", true, ["decrypt"]);
+      } catch (e) {
+        return null;
+      }
+    }
+
+    async function salvaChiaveDecrittazioneLocale(key) {
+      const raw = await crypto.subtle.exportKey("raw", key);
+      localStorage.setItem(LS_KEY_CHIAVE_DECRITTAZIONE, bytesToBase64(new Uint8Array(raw)));
+    }
+
+    function pulisciChiaveDecrittazioneLocale() {
+      localStorage.removeItem(LS_KEY_CHIAVE_DECRITTAZIONE);
+    }
+
+    function mostraGatePassphrase() {
+      document.getElementById("corpoForm").style.display = "none";
+      document.getElementById("selectPercorso").disabled = true;
+      document.getElementById("gatePassphrase").classList.remove("ft-gate-hidden");
+    }
+
+    function inizializzaGatePassphrase() {
+      const inputPassphrase = document.getElementById("inputPassphrase");
+      const btnSblocca = document.getElementById("btnSbloccaPassphrase");
+      const errorBox = document.getElementById("passphraseGateError");
+
+      btnSblocca.addEventListener("click", async () => {
+        errorBox.style.display = "none";
+        const passphrase = inputPassphrase.value.trim();
+        if (!passphrase) {
+          errorBox.textContent = "Inserisci il codice di sblocco ricevuto.";
+          errorBox.style.display = "block";
+          return;
+        }
+        btnSblocca.disabled = true;
+        try {
+          const candidateKey = await derivaChiaveDaPassphrase(passphrase);
+          // Verifica reale: prova a scaricare e decifrare QryCustomerMaster con la
+          // chiave appena derivata. Se il codice è sbagliato, la decrittazione
+          // fallisce qui (AES-GCM è autenticato: dati manomessi/chiave errata
+          // vengono rilevati, non producono un JSON silenziosamente corrotto).
+          const resTest = await fetch(urlClienti);
+          if (!resTest.ok) throw new Error("Impossibile raggiungere il database clienti per la verifica.");
+          const payloadCifrato = await resTest.json();
+          await decifraQryCustomerMaster(payloadCifrato, candidateKey);
+
+          await salvaChiaveDecrittazioneLocale(candidateKey);
+          window.location.reload();
+        } catch (e) {
+          errorBox.textContent = "Codice non riconosciuto: controlla di averlo copiato per intero.";
+          errorBox.style.display = "block";
+          btnSblocca.disabled = false;
+        }
+      });
+    }
+
     function showMaintenancePage() {
       document.body.classList.add("maintenance-mode");
       document.body.innerHTML = `
@@ -936,7 +1069,17 @@
       fornitoreTipologiaDb = datiLocaliFT.fornitoriTipologie;
       fornitoriDb = datiLocaliFT.fornitoriAnagrafica;
 
-      const urlClienti = "https://giuseppeangelici-coder.github.io/outlook-addin-test/QryCustomerMaster.json";
+      inizializzaGatePassphrase();
+
+      // GATE: QryCustomerMaster è pubblicato cifrato (AES-256-GCM, v3.2.0). Serve una
+      // chiave di decrittazione: se non è già persistita da uno sblocco precedente,
+      // si richiede la passphrase all'utente (una tantum, poi ricordata in locale).
+      chiaveDecrittazione = await leggiChiaveDecrittazioneLocale();
+      if (!chiaveDecrittazione) {
+        mostraGatePassphrase();
+        return;
+      }
+
       // emailPORTFOLIO.json eliminato (v3.2.0): confluisce nello stesso payload di
       // QryCustomerMaster (chiave portfolioSuperusers), preparato lato Power Automate
       // con un'azione Compose che avvolge clienti + superuser nello stesso oggetto.
@@ -1041,8 +1184,10 @@
 
       function applyRowLevelSecurity(email, portfolioList) {
         const cleanEmail = email.toLowerCase().trim();
-        const superUsersGlobal = portfolioList.map(u => (u.email || "").toLowerCase().trim())
-          .concat(LOCAL_SUPERUSER_OVERRIDE);
+        // v3.2.0: rimosso l'override manuale LOCAL_SUPERUSER_OVERRIDE. portfolioList
+        // arriva ora dalla tabella reale emailPORTFOLIO (confluita nel payload di
+        // QryCustomerMaster) ed è l'unica fonte per i superuser globali.
+        const superUsersGlobal = portfolioList.map(u => (u.email || "").toLowerCase().trim());
         // emailRSM.json eliminato (v3.2.0): l'elenco RSM è dato derivato, già presente
         // come join dentro QryCustomerMaster. Basta l'insieme distinto dei valori di
         // emailResponsabileCommerciale già fetchati in fullDatabase, si auto-aggiorna
@@ -1769,12 +1914,24 @@
         const resClienti = await fetch(urlClienti);
         if (!resClienti.ok) throw new Error("Errore database clienti");
 
-        const payloadClienti = await resClienti.json();
+        const payloadCifrato = await resClienti.json();
 
-        // v3.2.0: QryCustomerMaster.json è ora un oggetto contenitore con due chiavi
-        // (clienti + portfolioSuperusers), non più un array nudo. Controllo esplicito
-        // per un errore leggibile in fase di test-coppia con la modifica lato PA,
-        // invece di un errore JS generico se una delle due parti non è ancora pronta.
+        let payloadClienti;
+        try {
+          payloadClienti = await decifraQryCustomerMaster(payloadCifrato, chiaveDecrittazione);
+        } catch (errDecrypt) {
+          // Chiave persistita non più valida (es. passphrase ruotata annualmente sul
+          // server): la si scarta e si ripropone il gate, invece di un errore criptico.
+          pulisciChiaveDecrittazioneLocale();
+          mostraGatePassphrase();
+          return;
+        }
+
+        // v3.2.0: QryCustomerMaster.json (una volta decifrato) è un oggetto contenitore
+        // con due chiavi (clienti + portfolioSuperusers), non più un array nudo.
+        // Controllo esplicito per un errore leggibile in fase di test-coppia con la
+        // modifica lato PA, invece di un errore JS generico se una delle due parti
+        // non è ancora pronta.
         if (!payloadClienti || !Array.isArray(payloadClienti.clienti)) {
           throw new Error("QryCustomerMaster non ha il formato atteso (manca la chiave 'clienti'): verificare la Compose in Power Automate.");
         }
