@@ -148,11 +148,41 @@
     background-color: #fff4ce; color: #8a6d00; font-size: 11px; font-weight: 600;
   }
   .maintenance-footer { margin-top: 20px; font-size: 10px; color: #a19f9d; }
+
+  .ft-gate-wrap {
+    max-width: 360px;
+    margin: 24px auto 0 auto;
+    padding: 20px;
+    text-align: left;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    background: #fafafa;
+  }
+  .ft-gate-wrap h3 { font-size: 14px; margin: 0 0 10px 0; color: #0078d4; }
+  .ft-gate-wrap p { font-size: 12px; line-height: 1.5; margin: 0 0 12px 0; color: #444; }
+  .ft-gate-error {
+    display: none; margin-top: 10px; padding: 8px; border-radius: 2px;
+    background: #fdf3f4; border: 1px solid #d83b01; color: #a4262c; font-size: 11px;
+  }
+  .ft-gate-hidden { display: none !important; }
+  #btnAggiornaFT {
+    background: none; border: none; color: #0078d4; text-decoration: underline;
+    cursor: pointer; font-size: 10px; padding: 0; margin: 0; width: auto;
+  }
 </style>
 </head>
 <body>
   <h2>Inserimento Richiesta RV</h2>
   <div id="flowStatusMessage" class="box-avviso flow-error-message"></div>
+
+  <!-- GATE: caricamento file Tipologie Fornitori (locale, non più su repository pubblica) -->
+  <div id="gateFornitoriTipologie" class="ft-gate-wrap ft-gate-hidden">
+    <h3>Carica il file Tipologie Fornitori</h3>
+    <p id="ftGateMessage">Per usare il modulo devi caricare il file <b>FornitoriTipologie.json</b> ricevuto. Va fatto una sola volta: da qui in poi il taskpane lo ricorderà automaticamente.</p>
+    <input type="file" id="inputFileFornitoriTipologie" accept=".json,application/json" />
+    <button type="button" id="btnCaricaFT" style="margin-top:12px;">Carica file</button>
+    <div id="ftGateError" class="ft-gate-error"></div>
+  </div>
 
   <!-- 0. PERCORSO RICHIESTA -->
   <label for="selectPercorso">Tipo di Richiesta <span style="color: red;">*</span></label>
@@ -360,7 +390,9 @@
   <div id="log">Log eventi...</div>
 
   <footer class="app-footer">
-    <span>Versione: v3.1.0</span>
+    <span>Versione: v3.2.0</span>
+    &middot;
+    <button type="button" id="btnAggiornaFT">Aggiorna tipologie fornitori</button>
   </footer>
 
   <script>
@@ -720,6 +752,94 @@
       return EMAIL_ADDRESS_REGEX.test(email) ? email : "";
     }
 
+    // ─────────────────────────────────────────────────────────
+    // GATE: Tipologie Fornitori caricato localmente dall'utente
+    // (rimosso da GitHub Pages: file soggetto ad aggiornamenti
+    // infra-annuali, aprile-luglio, gestiti via canale Teams)
+    // ─────────────────────────────────────────────────────────
+    const LS_KEY_FORNITORI_TIPOLOGIE = "fornitoriTipologieData";
+
+    function leggiFornitoriTipologieLocali() {
+      try {
+        const raw = localStorage.getItem(LS_KEY_FORNITORI_TIPOLOGIE);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return validaStrutturaFornitoriTipologie(parsed) ? parsed : null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function validaStrutturaFornitoriTipologie(parsed) {
+      if (!Array.isArray(parsed) || parsed.length === 0) return false;
+      const primaRiga = parsed[0];
+      return ("CodFornitore" in primaRiga) && ("TipologiaIntervento" in primaRiga) && ("Region" in primaRiga);
+    }
+
+    function salvaFornitoriTipologieLocali(parsed) {
+      localStorage.setItem(LS_KEY_FORNITORI_TIPOLOGIE, JSON.stringify(parsed));
+    }
+
+    function mostraGateFornitoriTipologie() {
+      document.getElementById("corpoForm").style.display = "none";
+      document.getElementById("selectPercorso").disabled = true;
+      document.getElementById("gateFornitoriTipologie").classList.remove("ft-gate-hidden");
+    }
+
+    function nascondiGateFornitoriTipologie() {
+      document.getElementById("gateFornitoriTipologie").classList.add("ft-gate-hidden");
+    }
+
+    function inizializzaGateFornitoriTipologie() {
+      const inputFile = document.getElementById("inputFileFornitoriTipologie");
+      const btnCarica = document.getElementById("btnCaricaFT");
+      const errorBox = document.getElementById("ftGateError");
+
+      btnCarica.addEventListener("click", () => {
+        errorBox.style.display = "none";
+        const file = inputFile.files && inputFile.files[0];
+        if (!file) {
+          errorBox.textContent = "Seleziona prima un file dal tuo computer.";
+          errorBox.style.display = "block";
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          let parsed;
+          try {
+            parsed = JSON.parse(evt.target.result);
+          } catch (e) {
+            errorBox.textContent = "Il file selezionato non è leggibile: controlla di aver caricato il file corretto (FornitoriTipologie.json).";
+            errorBox.style.display = "block";
+            return;
+          }
+          if (!validaStrutturaFornitoriTipologie(parsed)) {
+            errorBox.textContent = "Il file caricato non ha il formato atteso: controlla di aver caricato il file corretto (FornitoriTipologie.json).";
+            errorBox.style.display = "block";
+            return;
+          }
+          salvaFornitoriTipologieLocali(parsed);
+          // Ricarico il taskpane: approccio volutamente semplice per evitare
+          // reinizializzazioni parziali dello stato del form.
+          window.location.reload();
+        };
+        reader.onerror = () => {
+          errorBox.textContent = "Errore nella lettura del file. Riprova.";
+          errorBox.style.display = "block";
+        };
+        reader.readAsText(file);
+      });
+
+      const btnAggiorna = document.getElementById("btnAggiornaFT");
+      if (btnAggiorna) {
+        btnAggiorna.addEventListener("click", () => {
+          document.getElementById("ftGateMessage").textContent =
+            "Carica la nuova versione del file FornitoriTipologie.json ricevuta dal canale Teams.";
+          mostraGateFornitoriTipologie();
+        });
+      }
+    }
+
     function showMaintenancePage() {
       document.body.classList.add("maintenance-mode");
       document.body.innerHTML = `
@@ -785,11 +905,18 @@
         return;
       }
 
+      inizializzaGateFornitoriTipologie();
+
+      // GATE: FornitoriTipologie non è più pubblicato su GitHub Pages (soggetto ad
+      // aggiornamenti infra-annuali, aprile-luglio). Va caricato una tantum dall'utente
+      // e persiste in localStorage; da qui in poi il taskpane lo rilegge da lì.
+      fornitoreTipologiaDb = leggiFornitoriTipologieLocali();
+      if (!fornitoreTipologiaDb) {
+        mostraGateFornitoriTipologie();
+        return;
+      }
+
       const urlClienti = "https://giuseppeangelici-coder.github.io/outlook-addin-test/QryCustomerMaster.json";
-      // FASE B (in test): FornitoriTipologie evoluta con Region + emailRV + ObbligoStima.
-      // Quando la validazione sarà completata, rinominare questo URL sul file definitivo
-      // (es. tornare a "FornitoriTipologie.json" una volta sostituito in repository).
-      const urlFornitoriTipologie = "https://giuseppeangelici-coder.github.io/outlook-addin-test/FornitoriTipologie.json";
       const urlFornitoriAnagrafica = "https://giuseppeangelici-coder.github.io/outlook-addin-test/Fornitori.json";
       const urlPortfolio = "https://giuseppeangelici-coder.github.io/outlook-addin-test/emailPORTFOLIO.json";
       const urlRSM = "https://giuseppeangelici-coder.github.io/outlook-addin-test/emailRSM.json";
@@ -1607,22 +1734,21 @@
       }
 
       try {
-        const [resClienti, resFornitoriTipologie, resFornitoriAnagrafica, resPortfolio, resRSM] = await Promise.all([
+        // fornitoreTipologiaDb è già stato caricato da localStorage (vedi GATE sopra),
+        // non è più tra i file recuperati dalla repository pubblica.
+        const [resClienti, resFornitoriAnagrafica, resPortfolio, resRSM] = await Promise.all([
           fetch(urlClienti),
-          fetch(urlFornitoriTipologie),
           fetch(urlFornitoriAnagrafica),
           fetch(urlPortfolio),
           fetch(urlRSM)
         ]);
 
         if (!resClienti.ok) throw new Error("Errore database clienti");
-        if (!resFornitoriTipologie.ok) throw new Error("Errore database fornitori/tipologie");
         if (!resFornitoriAnagrafica.ok) throw new Error("Errore database anagrafica fornitori");
         if (!resPortfolio.ok) throw new Error("Errore database superusers portfolio");
         if (!resRSM.ok) throw new Error("Errore database regional manager");
 
         fullDatabase = await resClienti.json();
-        fornitoreTipologiaDb = await resFornitoriTipologie.json();
         fornitoriDb = await resFornitoriAnagrafica.json();
         const portfolioDb = await resPortfolio.json();
         const rsmDb = await resRSM.json();
