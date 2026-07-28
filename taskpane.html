@@ -1,35 +1,27 @@
 <!-- 
   ADD-IN RICHIESTE RV - TASKPANE COMPONENT
-  Version: 3.1.0
-  Date: 2026-07-27
+  Version: 3.2.0
+  Date: 2026-07-28
   Changes:
-    - Sequenzialità Fornitore -> Tipologia: la Tipologia è ora bloccata finché non viene
-      scelto un Fornitore (prima si potevano compilare in qualsiasi ordine). Tipologia
-      sempre filtrata sul CodFornitore selezionato, mai sull'intera region.
-    - Riordinato il menu Periodo Validità: 1. Una tantum / Spot, 2. Intervento Annuale,
-      3. Pluriennale (in precedenza Annuale, Pluriennale, Spot).
-    - Rimosso "Tipo Importo" (Fisso/Variabile) e la relativa sincronizzazione
-      Reintegrato/Liquidare/Extra: la logica economica ora deriva interamente dalla riga
-      Tipologia abbinata (nuovi campi Importo, ReintegroUM, ReintegroUnitario).
-    - Nuova logica campo economico unico "Reintegro Fornitore": se la Tipologia ha un
-      valore in Importo, il campo è precompilato e non editabile; se la Tipologia ha
-      ReintegroUM + ReintegroUnitario, appare una casella quantità (label = ReintegroUM)
-      e il Reintegro Fornitore è calcolato come ReintegroUnitario × quantità; se la
-      Tipologia non ha nessuno dei due, il campo Reintegro Fornitore torna editabile.
-    - ObbligoStima ora innesca la sezione Quantità Stima solo se ObbligoStima = true E
-      ReintegroUM/ReintegroUnitario sono entrambi vuoti sulla Tipologia scelta. Aggiunto
-      failsafe hardcoded: per la Tipologia "EXTRA - ON TOP da accordi con RV" la sezione
-      Quantità Stima resta sempre nascosta, indipendentemente dal valore di ObbligoStima
-      letto da JSON.
-    - Rimossi i campi "Importo Extra Non Coperto" e "Importo da Liquidare al Cliente".
-    - Aggiunto menu "Modalità Fatturazione" (In fattura / Fuori fattura) in calce alla
-      sezione economica del percorso standard; Fuori fattura rende obbligatorio il
-      campo Note e innesca la CC a contratti.clienti@partesa.it (NC a fine periodo o
-      fattura promo del fornitore); In fattura (listino ribassato) non genera CC a
-      Contratti.
-    - Percorso Merce Omaggio: rimosso completamente il Periodo Validità (menu, sotto-
-      sezioni e riga nell'email); gli altri due percorsi non sono stati toccati.
+    - GATE FornitoriTipologie: il file non viene più recuperato da GitHub Pages (soggetto
+      ad aggiornamenti infra-annuali concentrati aprile-luglio, gestiti via canale Teams).
+      Al primo avvio il taskpane richiede il caricamento locale del file
+      FornitoriTipologie.json (input file + FileReader), lo valida e lo persiste in
+      localStorage; le aperture successive lo rileggono da lì senza richiedere nulla
+      all'utente. Aggiunto pulsante "Aggiorna tipologie fornitori" in footer per
+      ricaricare una nuova versione in qualsiasi momento, indipendente dal gate iniziale.
+      Il file locale contiene ora anche l'anagrafica Fornitori (ex Fornitori.json, non
+      più fetchato da GitHub Pages: stesso ciclo di manutenzione delle Tipologie),
+      sotto due chiavi distinte: fornitoriTipologie e fornitoriAnagrafica. Validazione
+      minima attesa: fornitoriTipologie con CodFornitore/TipologiaIntervento/Region,
+      fornitoriAnagrafica con CodFornitore/Region.
   Changelog precedente:
+    - v3.1.0: Sequenzialità Fornitore -> Tipologia; riordino menu Periodo Validità;
+      rimosso "Tipo Importo" e sostituito da campo unico "Reintegro Fornitore" derivato
+      dalla riga Tipologia (Importo o ReintegroUM/ReintegroUnitario); rimossi i campi
+      "Importo Extra Non Coperto" e "Importo da Liquidare al Cliente"; aggiunto menu
+      "Modalità Fatturazione" (In fattura / Fuori fattura); rimosso Periodo Validità dal
+      percorso Merce Omaggio.
     - v2.3.4 (Fase B, in test): Tipo Importo = "Variabile" con campo dedicato "Importo
       Stimato Contributo a Fine Periodo"; niente CC a contratti.clienti@partesa.it in
       quello scenario.
@@ -59,10 +51,8 @@
       nei percorsi fuori binario, resetForm() riallineata sugli ID corretti del DOM.
 -->
 <!--
-  NOTA PER IL TEST: il taskpane punta a FornitoriTipologieFASE-b.json (non al file
-  FornitoriTipologie.json di produzione). A validazione completata, aggiornare l'URL
-  in Office.onReady (variabile urlFornitoriTipologie) sul nome definitivo. Il file dovrà
-  ospitare anche i nuovi campi Importo, ReintegroUM, ReintegroUnitario per Tipologia.
+  NOTA: FornitoriTipologie non è più fetchato da GitHub Pages (v3.2.0): caricato
+  localmente dall'utente al primo avvio, vedi GATE FornitoriTipologie in Office.onReady.
 -->
 <!DOCTYPE html>
 <html>
@@ -178,7 +168,7 @@
   <!-- GATE: caricamento file Tipologie Fornitori (locale, non più su repository pubblica) -->
   <div id="gateFornitoriTipologie" class="ft-gate-wrap ft-gate-hidden">
     <h3>Carica il file Tipologie Fornitori</h3>
-    <p id="ftGateMessage">Per usare il modulo devi caricare il file <b>FornitoriTipologie.json</b> ricevuto. Va fatto una sola volta: da qui in poi il taskpane lo ricorderà automaticamente.</p>
+    <p id="ftGateMessage">Per usare il modulo devi caricare il file <b>FornitoriTipologie.json</b> ricevuto (contiene sia Tipologie sia anagrafica Fornitori). Va fatto una sola volta: da qui in poi il taskpane lo ricorderà automaticamente.</p>
     <input type="file" id="inputFileFornitoriTipologie" accept=".json,application/json" />
     <button type="button" id="btnCaricaFT" style="margin-top:12px;">Carica file</button>
     <div id="ftGateError" class="ft-gate-error"></div>
@@ -396,7 +386,7 @@
   </footer>
 
   <script>
-    const APP_VERSION = "Versione: v3.1.0";
+    const APP_VERSION = "Versione: v3.2.0";
     const POWER_AUTOMATE_URL = "https://default66e853deece344dd9d66ee6bdf4159.d4.environment.api.powerplatform.com/powerautomate/automations/direct/workflows/465577c70a414425a1f278e3c3f2bb43/triggers/manual/paths/invoke?api-version=1";
 
     const DEBUG_MODE = false;
@@ -753,9 +743,14 @@
     }
 
     // ─────────────────────────────────────────────────────────
-    // GATE: Tipologie Fornitori caricato localmente dall'utente
-    // (rimosso da GitHub Pages: file soggetto ad aggiornamenti
-    // infra-annuali, aprile-luglio, gestiti via canale Teams)
+    // GATE: file caricato localmente dall'utente. Contiene sia le Tipologie
+    // (fornitoriTipologie) sia l'anagrafica Fornitori (fornitoriAnagrafica):
+    // le due cose condividono lo stesso ciclo di manutenzione (aprile-luglio,
+    // stessa persona che aggiorna entrambe insieme), quindi viaggiano nello
+    // stesso file distribuito via Teams. Il nome "FornitoriTipologie.json"
+    // resta coerente col contenuto per puro caso fortunato: descrive già
+    // sia Fornitori sia Tipologie.
+    // (rimosso da GitHub Pages: soggetto ad aggiornamenti infra-annuali)
     // ─────────────────────────────────────────────────────────
     const LS_KEY_FORNITORI_TIPOLOGIE = "fornitoriTipologieData";
 
@@ -771,9 +766,16 @@
     }
 
     function validaStrutturaFornitoriTipologie(parsed) {
-      if (!Array.isArray(parsed) || parsed.length === 0) return false;
-      const primaRiga = parsed[0];
-      return ("CodFornitore" in primaRiga) && ("TipologiaIntervento" in primaRiga) && ("Region" in primaRiga);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return false;
+      const tipologie = parsed.fornitoriTipologie;
+      const anagrafica = parsed.fornitoriAnagrafica;
+      if (!Array.isArray(tipologie) || tipologie.length === 0) return false;
+      if (!Array.isArray(anagrafica) || anagrafica.length === 0) return false;
+      const primaTipologia = tipologie[0];
+      const primaAnagrafica = anagrafica[0];
+      const tipologieOk = ("CodFornitore" in primaTipologia) && ("TipologiaIntervento" in primaTipologia) && ("Region" in primaTipologia);
+      const anagraficaOk = ("CodFornitore" in primaAnagrafica) && ("Region" in primaAnagrafica);
+      return tipologieOk && anagraficaOk;
     }
 
     function salvaFornitoriTipologieLocali(parsed) {
@@ -814,7 +816,7 @@
             return;
           }
           if (!validaStrutturaFornitoriTipologie(parsed)) {
-            errorBox.textContent = "Il file caricato non ha il formato atteso: controlla di aver caricato il file corretto (FornitoriTipologie.json).";
+            errorBox.textContent = "Il file caricato non ha il formato atteso (deve contenere sia le Tipologie sia l'anagrafica Fornitori): controlla di aver caricato il file corretto (FornitoriTipologie.json).";
             errorBox.style.display = "block";
             return;
           }
@@ -910,14 +912,18 @@
       // GATE: FornitoriTipologie non è più pubblicato su GitHub Pages (soggetto ad
       // aggiornamenti infra-annuali, aprile-luglio). Va caricato una tantum dall'utente
       // e persiste in localStorage; da qui in poi il taskpane lo rilegge da lì.
-      fornitoreTipologiaDb = leggiFornitoriTipologieLocali();
-      if (!fornitoreTipologiaDb) {
+      // Il file locale contiene sia fornitoriTipologie sia fornitoriAnagrafica (ex
+      // Fornitori.json, anch'esso non più fetchato da GitHub Pages: stesso ciclo di
+      // manutenzione delle Tipologie, aggiornati insieme dalla stessa persona).
+      const datiLocaliFT = leggiFornitoriTipologieLocali();
+      if (!datiLocaliFT) {
         mostraGateFornitoriTipologie();
         return;
       }
+      fornitoreTipologiaDb = datiLocaliFT.fornitoriTipologie;
+      fornitoriDb = datiLocaliFT.fornitoriAnagrafica;
 
       const urlClienti = "https://giuseppeangelici-coder.github.io/outlook-addin-test/QryCustomerMaster.json";
-      const urlFornitoriAnagrafica = "https://giuseppeangelici-coder.github.io/outlook-addin-test/Fornitori.json";
       const urlPortfolio = "https://giuseppeangelici-coder.github.io/outlook-addin-test/emailPORTFOLIO.json";
       const urlRSM = "https://giuseppeangelici-coder.github.io/outlook-addin-test/emailRSM.json";
 
@@ -1734,22 +1740,19 @@
       }
 
       try {
-        // fornitoreTipologiaDb è già stato caricato da localStorage (vedi GATE sopra),
-        // non è più tra i file recuperati dalla repository pubblica.
-        const [resClienti, resFornitoriAnagrafica, resPortfolio, resRSM] = await Promise.all([
+        // fornitoreTipologiaDb e fornitoriDb sono già stati caricati da localStorage
+        // (vedi GATE sopra), non sono più tra i file recuperati dalla repository pubblica.
+        const [resClienti, resPortfolio, resRSM] = await Promise.all([
           fetch(urlClienti),
-          fetch(urlFornitoriAnagrafica),
           fetch(urlPortfolio),
           fetch(urlRSM)
         ]);
 
         if (!resClienti.ok) throw new Error("Errore database clienti");
-        if (!resFornitoriAnagrafica.ok) throw new Error("Errore database anagrafica fornitori");
         if (!resPortfolio.ok) throw new Error("Errore database superusers portfolio");
         if (!resRSM.ok) throw new Error("Errore database regional manager");
 
         fullDatabase = await resClienti.json();
-        fornitoriDb = await resFornitoriAnagrafica.json();
         const portfolioDb = await resPortfolio.json();
         const rsmDb = await resRSM.json();
 
