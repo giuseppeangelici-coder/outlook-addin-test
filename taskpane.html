@@ -15,6 +15,19 @@
       sotto due chiavi distinte: fornitoriTipologie e fornitoriAnagrafica. Validazione
       minima attesa: fornitoriTipologie con CodFornitore/TipologiaIntervento/Region,
       fornitoriAnagrafica con CodFornitore/Region.
+    - Eliminato emailRSM.json dalla repository pubblica e dal fetch remoto: l'elenco
+      RSM è dato ridondante (già presente come join dentro QryCustomerMaster), ora
+      calcolato a runtime in applyRowLevelSecurity come insieme distinto dei valori
+      di emailResponsabileCommerciale già fetchati. Si auto-aggiorna ad ogni
+      variazione dell'anagrafica clienti, zero manutenzione.
+    - Eliminato emailPORTFOLIO.json dalla repository pubblica e dal fetch remoto:
+      confluisce nel payload di QryCustomerMaster.json, che ora è un oggetto
+      contenitore con due chiavi (clienti + portfolioSuperusers) invece di un array
+      nudo — stesso pattern già usato per il file locale Fornitori/Tipologie.
+      Aggiunta validazione esplicita con messaggio diagnostico leggibile se una delle
+      due chiavi manca (utile in fase di test-coppia con la modifica lato Power
+      Automate). Propedeutico alla cifratura di QryCustomerMaster (fase successiva):
+      cifrare la struttura definitiva del payload evita di doverla rifare due volte.
   Changelog precedente:
     - v3.1.0: Sequenzialità Fornitore -> Tipologia; riordino menu Periodo Validità;
       rimosso "Tipo Importo" e sostituito da campo unico "Reintegro Fornitore" derivato
@@ -924,8 +937,11 @@
       fornitoriDb = datiLocaliFT.fornitoriAnagrafica;
 
       const urlClienti = "https://giuseppeangelici-coder.github.io/outlook-addin-test/QryCustomerMaster.json";
-      const urlPortfolio = "https://giuseppeangelici-coder.github.io/outlook-addin-test/emailPORTFOLIO.json";
-      const urlRSM = "https://giuseppeangelici-coder.github.io/outlook-addin-test/emailRSM.json";
+      // emailPORTFOLIO.json eliminato (v3.2.0): confluisce nello stesso payload di
+      // QryCustomerMaster (chiave portfolioSuperusers), preparato lato Power Automate
+      // con un'azione Compose che avvolge clienti + superuser nello stesso oggetto.
+      // emailRSM.json eliminato (v3.2.0): l'elenco RSM è calcolato a runtime da
+      // fullDatabase dentro applyRowLevelSecurity, vedi commento lì.
 
       function clearTipologiaSelection() {
         inputTipologia.value = "";
@@ -1023,11 +1039,19 @@
           .map(r => r.f);
       }
 
-      function applyRowLevelSecurity(email, portfolioList, rsmList) {
+      function applyRowLevelSecurity(email, portfolioList) {
         const cleanEmail = email.toLowerCase().trim();
         const superUsersGlobal = portfolioList.map(u => (u.email || "").toLowerCase().trim())
           .concat(LOCAL_SUPERUSER_OVERRIDE);
-        const rsmUsers = rsmList.map(u => (u.email || "").toLowerCase().trim());
+        // emailRSM.json eliminato (v3.2.0): l'elenco RSM è dato derivato, già presente
+        // come join dentro QryCustomerMaster. Basta l'insieme distinto dei valori di
+        // emailResponsabileCommerciale già fetchati in fullDatabase, si auto-aggiorna
+        // ad ogni variazione dell'anagrafica clienti senza bisogno di un file a parte.
+        const rsmUsers = [...new Set(
+          fullDatabase
+            .map(c => (c.emailResponsabileCommerciale || c.EmailResponsabileCommerciale || "").toLowerCase().trim())
+            .filter(Boolean)
+        )];
 
         if (superUsersGlobal.includes(cleanEmail)) {
           filteredDatabase = fullDatabase;
@@ -1742,22 +1766,27 @@
       try {
         // fornitoreTipologiaDb e fornitoriDb sono già stati caricati da localStorage
         // (vedi GATE sopra), non sono più tra i file recuperati dalla repository pubblica.
-        const [resClienti, resPortfolio, resRSM] = await Promise.all([
-          fetch(urlClienti),
-          fetch(urlPortfolio),
-          fetch(urlRSM)
-        ]);
-
+        const resClienti = await fetch(urlClienti);
         if (!resClienti.ok) throw new Error("Errore database clienti");
-        if (!resPortfolio.ok) throw new Error("Errore database superusers portfolio");
-        if (!resRSM.ok) throw new Error("Errore database regional manager");
 
-        fullDatabase = await resClienti.json();
-        const portfolioDb = await resPortfolio.json();
-        const rsmDb = await resRSM.json();
+        const payloadClienti = await resClienti.json();
+
+        // v3.2.0: QryCustomerMaster.json è ora un oggetto contenitore con due chiavi
+        // (clienti + portfolioSuperusers), non più un array nudo. Controllo esplicito
+        // per un errore leggibile in fase di test-coppia con la modifica lato PA,
+        // invece di un errore JS generico se una delle due parti non è ancora pronta.
+        if (!payloadClienti || !Array.isArray(payloadClienti.clienti)) {
+          throw new Error("QryCustomerMaster non ha il formato atteso (manca la chiave 'clienti'): verificare la Compose in Power Automate.");
+        }
+        if (!Array.isArray(payloadClienti.portfolioSuperusers)) {
+          throw new Error("QryCustomerMaster non ha il formato atteso (manca la chiave 'portfolioSuperusers'): verificare la Compose in Power Automate.");
+        }
+
+        fullDatabase = payloadClienti.clienti;
+        const portfolioDb = payloadClienti.portfolioSuperusers;
 
         log("Database e file permessi caricati.");
-        applyRowLevelSecurity(userEmail, portfolioDb, rsmDb);
+        applyRowLevelSecurity(userEmail, portfolioDb);
         setupGestioneValidita();
         setupLogicaEconomica();
         setupGestionePercorso();
