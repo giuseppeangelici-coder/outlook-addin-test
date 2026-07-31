@@ -1,9 +1,17 @@
 <!-- 
   ADD-IN RICHIESTE RV - TASKPANE COMPONENT
-  Version: 3.2.0
-  Date: 2026-07-28
+  Version: 4.0.1 "RollingDices"
+  Date: 2026-07-31
   Changes:
-    - GATE FornitoriTipologie: il file non viene più recuperato da GitHub Pages (soggetto
+    - Punto 10: Tipologia "EXTRA - ON TOP da accordi con RV" visibile solo quando il
+      taskpane è aperto in modalità "attach" (email di partenza presente, poi allegata
+      alla richiesta); esentata dall'obbligo di compilazione Note anche in presenza di
+      validità pluriennale o Modalità Fatturazione "Fuori fattura" (indicatore visivo
+      e blocco al submit entrambi aggiornati).
+    - Uscita dalla nomenclatura di sviluppo (DEV): prima release numerata come
+      milestone di produzione.
+  Changelog precedente:
+    - v3.2.0: GATE FornitoriTipologie: il file non viene più recuperato da GitHub Pages (soggetto
       ad aggiornamenti infra-annuali concentrati aprile-luglio, gestiti via canale Teams).
       Al primo avvio il taskpane richiede il caricamento locale del file
       FornitoriTipologie.json (input file + FileReader), lo valida e lo persiste in
@@ -15,12 +23,12 @@
       sotto due chiavi distinte: fornitoriTipologie e fornitoriAnagrafica. Validazione
       minima attesa: fornitoriTipologie con CodFornitore/TipologiaIntervento/Region,
       fornitoriAnagrafica con CodFornitore/Region.
-    - Eliminato emailRSM.json dalla repository pubblica e dal fetch remoto: l'elenco
+      Eliminato emailRSM.json dalla repository pubblica e dal fetch remoto: l'elenco
       RSM è dato ridondante (già presente come join dentro QryCustomerMaster), ora
       calcolato a runtime in applyRowLevelSecurity come insieme distinto dei valori
       di emailResponsabileCommerciale già fetchati. Si auto-aggiorna ad ogni
       variazione dell'anagrafica clienti, zero manutenzione.
-    - Eliminato emailPORTFOLIO.json dalla repository pubblica e dal fetch remoto:
+      Eliminato emailPORTFOLIO.json dalla repository pubblica e dal fetch remoto:
       confluisce nel payload di QryCustomerMaster.json, che ora è un oggetto
       contenitore con due chiavi (clienti + portfolioSuperusers) invece di un array
       nudo — stesso pattern già usato per il file locale Fornitori/Tipologie.
@@ -28,11 +36,11 @@
       due chiavi manca (utile in fase di test-coppia con la modifica lato Power
       Automate). Propedeutico alla cifratura di QryCustomerMaster (fase successiva):
       cifrare la struttura definitiva del payload evita di doverla rifare due volte.
-    - Rimosso LOCAL_SUPERUSER_OVERRIDE (override manuale hardcoded, e.simonella):
+      Rimosso LOCAL_SUPERUSER_OVERRIDE (override manuale hardcoded, e.simonella):
       portfolioSuperusers arriva ora dalla tabella reale emailPORTFOLIO (confluita nel
       payload di QryCustomerMaster) ed è l'unica fonte per i superuser globali, senza
       più un secondo elenco parallelo da mantenere allineato a mano.
-    - GATE passphrase + decrittazione QryCustomerMaster: il file è ora pubblicato
+      GATE passphrase + decrittazione QryCustomerMaster: il file è ora pubblicato
       cifrato (AES-256-GCM) da una pipeline GitHub Actions lato server. Al primo
       avvio il taskpane richiede una passphrase, deriva la chiave via PBKDF2-SHA256
       (stesso salt/iterazioni dello script encrypt.js lato server, vedi commento),
@@ -41,7 +49,6 @@
       silenziosi), poi persiste la chiave (non la passphrase) in localStorage. Se in
       futuro la passphrase ruota e la chiave persistita non decifra più, il gate si
       ripropone automaticamente senza intervento manuale.
-  Changelog precedente:
     - v3.1.0: Sequenzialità Fornitore -> Tipologia; riordino menu Periodo Validità;
       rimosso "Tipo Importo" e sostituito da campo unico "Reintegro Fornitore" derivato
       dalla riga Tipologia (Importo o ReintegroUM/ReintegroUnitario); rimossi i campi
@@ -419,13 +426,13 @@
   <div id="log">Log eventi...</div>
 
   <footer class="app-footer">
-    <span>Versione: v3.2.0</span>
+    <span>Versione: v4.0.1 "RollingDices"</span>
     &middot;
     <button type="button" id="btnAggiornaFT">Aggiorna tipologie fornitori</button>
   </footer>
 
   <script>
-    const APP_VERSION = "Versione: v3.2.0";
+    const APP_VERSION = "Versione: v4.0.1 \"RollingDices\"";
     const POWER_AUTOMATE_URL = "https://default66e853deece344dd9d66ee6bdf4159.d4.environment.api.powerplatform.com/powerautomate/automations/direct/workflows/465577c70a414425a1f278e3c3f2bb43/triggers/manual/paths/invoke?api-version=1";
 
     const DEBUG_MODE = false;
@@ -1122,6 +1129,12 @@
             .filter(Boolean);
           if (emailRvRigaLista.length && !emailRvRigaLista.includes(emailRvCliente)) return false;
 
+          // Punto 10 (v3.2.0): la Tipologia "EXTRA - ON TOP da accordi con RV" richiede
+          // che l'accordo scritto con l'RV sia allegato alla richiesta: va quindi proposta
+          // solo quando il taskpane è aperto in modalità "attach" (email di partenza presente).
+          const nomeItemNormalizzato = String(item.TipologiaIntervento || "").trim().toLowerCase();
+          if (nomeItemNormalizzato === TIPOLOGIA_EXTRA_ON_TOP && mode !== "attach") return false;
+
           return true;
         });
       }
@@ -1278,7 +1291,14 @@
         const reqNote = document.getElementById("reqNote");
         const percorso = document.getElementById("selectPercorso").value;
         const isFuoriFattura = percorso === PERCORSO_RICHIESTA.standard && selectModalitaFatturazione.value === "fuori_fattura";
-        if (tipoValidita === "pluriennale" || isFuoriFattura) {
+
+        // Punto 10 (v3.2.0): per "EXTRA - ON TOP da accordi con RV" le Note restano
+        // sempre facoltative, anche in presenza di validità pluriennale o Fuori fattura
+        // (l'accordo con l'RV è già documentato nell'email allegata).
+        const nomeTipologiaNormalizzato = String(selectedTipologia && selectedTipologia.TipologiaIntervento || "").trim().toLowerCase();
+        const isExtraOnTop = percorso === PERCORSO_RICHIESTA.standard && nomeTipologiaNormalizzato === TIPOLOGIA_EXTRA_ON_TOP;
+
+        if (!isExtraOnTop && (tipoValidita === "pluriennale" || isFuoriFattura)) {
           reqNote.style.display = "inline";
         } else {
           reqNote.style.display = "none";
@@ -2294,11 +2314,15 @@
           return;
         }
 
-        if (tipoValidita === "pluriennale" && txtNote === "") {
+        // Punto 10 (v3.2.0): "EXTRA - ON TOP da accordi con RV" è esente dall'obbligo di
+        // Note anche con validità pluriennale o Fuori fattura (vedi rinfrescaObbligatorietaNote).
+        const isExtraOnTopSubmit = tipologiaScelta.trim().toLowerCase() === TIPOLOGIA_EXTRA_ON_TOP;
+
+        if (!isExtraOnTopSubmit && tipoValidita === "pluriennale" && txtNote === "") {
           alert("Errore: Per i contratti Pluriennali è obbligatorio specificare la ripartizione economica per anno nel campo Note.");
           return;
         }
-        if (modalitaFatt === "fuori_fattura" && txtNote === "") {
+        if (!isExtraOnTopSubmit && modalitaFatt === "fuori_fattura" && txtNote === "") {
           alert("Errore: con Modalità Fatturazione 'Fuori fattura' il campo Note è obbligatorio.");
           return;
         }
