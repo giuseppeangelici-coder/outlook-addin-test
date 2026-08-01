@@ -1,16 +1,26 @@
 <!-- 
   ADD-IN RICHIESTE RV - TASKPANE COMPONENT
-  Version: 4.0.1 "RollingDices"
-  Date: 2026-07-31
+  Version: 4.0.2 "Rolling Dices"
+  Date: 2026-08-01
   Changes:
-    - Punto 10: Tipologia "EXTRA - ON TOP da accordi con RV" visibile solo quando il
-      taskpane è aperto in modalità "attach" (email di partenza presente, poi allegata
-      alla richiesta); esentata dall'obbligo di compilazione Note anche in presenza di
-      validità pluriennale o Modalità Fatturazione "Fuori fattura" (indicatore visivo
-      e blocco al submit entrambi aggiornati).
-    - Uscita dalla nomenclatura di sviluppo (DEV): prima release numerata come
-      milestone di produzione.
+    - Punto 11 (fix): percorso "Investimento coperto da fornitore", modalità solo
+      compilazione (mode !== "attach", niente email allegata). Il menu di ricerca
+      Fornitori mostrava tutti i fornitori della region, incluso chi ha SOLO la
+      Tipologia "EXTRA - ON TOP da accordi con RV" (che richiede l'allegato email e
+      quindi in questa modalità non è mai selezionabile, vedi getTipologieFiltrate).
+      Ora il menu Fornitori, in modalità solo compilazione, propone solo i fornitori
+      che hanno almeno una Tipologia diversa da EXTRA, cioè con reintegri noti.
+      In modalità "attach" nessuna modifica: restano visibili tutti i fornitori della
+      region, perché lì l'EXTRA è ammesso.
   Changelog precedente:
+    - v 4.0.2 "RollingDices" (2026-07-31):
+      - Punto 10: Tipologia "EXTRA - ON TOP da accordi con RV" visibile solo quando il
+        taskpane è aperto in modalità "attach" (email di partenza presente, poi allegata
+        alla richiesta); esentata dall'obbligo di compilazione Note anche in presenza di
+        validità pluriennale o Modalità Fatturazione "Fuori fattura" (indicatore visivo
+        e blocco al submit entrambi aggiornati).
+      - Uscita dalla nomenclatura di sviluppo (DEV): prima release numerata come
+        milestone di produzione.
     - v3.2.0: GATE FornitoriTipologie: il file non viene più recuperato da GitHub Pages (soggetto
       ad aggiornamenti infra-annuali concentrati aprile-luglio, gestiti via canale Teams).
       Al primo avvio il taskpane richiede il caricamento locale del file
@@ -426,13 +436,13 @@
   <div id="log">Log eventi...</div>
 
   <footer class="app-footer">
-    <span>Versione: v4.0.1 "RollingDices"</span>
+    <span>Versione: v 4.0.2 "RollingDices"</span>
     &middot;
     <button type="button" id="btnAggiornaFT">Aggiorna tipologie fornitori</button>
   </footer>
 
   <script>
-    const APP_VERSION = "Versione: v4.0.1 \"RollingDices\"";
+    const APP_VERSION = "Versione: v 4.0.2 \"RollingDices\"";
     const POWER_AUTOMATE_URL = "https://default66e853deece344dd9d66ee6bdf4159.d4.environment.api.powerplatform.com/powerautomate/automations/direct/workflows/465577c70a414425a1f278e3c3f2bb43/triggers/manual/paths/invoke?api-version=1";
 
     const DEBUG_MODE = false;
@@ -1184,10 +1194,33 @@
         return qi === q.length ? 40 : -1;
       }
 
+      // Punto 11 (fix): un Fornitore ha in tabella tipologie SEMPRE una riga
+      // "EXTRA - ON TOP da accordi con RV" (per definizione, ogni fornitore la ammette).
+      // Questa funzione verifica se il Fornitore ha ANCHE almeno una Tipologia "normale"
+      // (diversa da EXTRA) nella region del cliente, cioè se esistono reintegri noti.
+      function fornitoreHaTipologieNonExtra(codFornitore, regionCliente) {
+        return fornitoreTipologiaDb.some(item => {
+          if (String(item.CodFornitore || "").trim() !== String(codFornitore).trim()) return false;
+          if (String(item.Region || "").trim() !== regionCliente) return false;
+          const nomeItemNormalizzato = String(item.TipologiaIntervento || "").trim().toLowerCase();
+          return nomeItemNormalizzato !== TIPOLOGIA_EXTRA_ON_TOP;
+        });
+      }
+
       function getFornitoriPerRegioneCliente() {
         if (!selectedCustomer) return [];
         const regionCliente = estraiCodiceRegion(selectedCustomer);
-        return fornitoriDb.filter(f => String(f.Region || "").trim() === regionCliente);
+        const fornitoriRegione = fornitoriDb.filter(f => String(f.Region || "").trim() === regionCliente);
+        // Punto 11 (fix): in modalità "solo compilazione" (niente email allegata, mode
+        // !== "attach") la Tipologia "EXTRA - ON TOP da accordi con RV" non è mai
+        // selezionabile (vedi getTipologieFiltrate), quindi il menu Fornitori deve
+        // mostrare solo i fornitori che hanno almeno un'altra Tipologia, cioè reintegri
+        // noti. In modalità "attach" il comportamento resta invariato (tutti i fornitori
+        // della region), perché lì l'EXTRA è ammesso.
+        if (mode !== "attach") {
+          return fornitoriRegione.filter(f => fornitoreHaTipologieNonExtra(f.CodFornitore, regionCliente));
+        }
+        return fornitoriRegione;
       }
 
       function cercaFornitori(query) {
