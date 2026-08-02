@@ -1,12 +1,17 @@
 <!-- 
   ADD-IN RICHIESTE RV - TASKPANE COMPONENT
-  Version: 4.0.3 "Rolling Dices"
+  Version: 4.0.2 "Rolling Dices"
   Date: 2026-08-01
   Changes:
-    - Il menu Fornitori, in modalità solo compilazione, propone solo i fornitori
-      che hanno almeno una Tipologia, cioè con reintegri noti.
-      In modalità "attach" restano visibili tutti i fornitori della
-      region e la tipologie EXTRA viene generata a runtime per tutti i fornitori esistente in fornitoritipologie.json
+    - Punto 11 (fix): percorso "Investimento coperto da fornitore", modalità solo
+      compilazione (mode !== "attach", niente email allegata). Il menu di ricerca
+      Fornitori mostrava tutti i fornitori della region, incluso chi ha SOLO la
+      Tipologia "EXTRA - ON TOP da accordi con RV" (che richiede l'allegato email e
+      quindi in questa modalità non è mai selezionabile, vedi getTipologieFiltrate).
+      Ora il menu Fornitori, in modalità solo compilazione, propone solo i fornitori
+      che hanno almeno una Tipologia diversa da EXTRA, cioè con reintegri noti.
+      In modalità "attach" nessuna modifica: restano visibili tutti i fornitori della
+      region, perché lì l'EXTRA è ammesso.
   Changelog precedente:
     - v 4.0.2 "RollingDices" (2026-07-31):
       - Punto 10: Tipologia "EXTRA - ON TOP da accordi con RV" visibile solo quando il
@@ -211,8 +216,10 @@
   <div id="gateFornitoriTipologie" class="ft-gate-wrap ft-gate-hidden">
     <h3>Carica il file Tipologie Fornitori</h3>
     <p id="ftGateMessage">Per usare il modulo devi caricare il file <b>FornitoriTipologie.json</b> ricevuto (contiene sia Tipologie sia anagrafica Fornitori). Va fatto una sola volta: da qui in poi il taskpane lo ricorderà automaticamente.</p>
+    <div id="ftGateRegioniCaricate" style="margin:10px 0;"></div>
     <input type="file" id="inputFileFornitoriTipologie" accept=".json,application/json" />
     <button type="button" id="btnCaricaFT" style="margin-top:12px;">Carica file</button>
+    <button type="button" id="btnContinuaFT" class="ft-gate-hidden" style="margin-top:12px; margin-left:8px;">Continua</button>
     <div id="ftGateError" class="ft-gate-error"></div>
   </div>
 
@@ -431,13 +438,13 @@
   <div id="log">Log eventi...</div>
 
   <footer class="app-footer">
-    <span>Versione: v 4.0.3 "RollingDices"</span>
+    <span>Versione: v 4.0.2 "RollingDices"</span>
     &middot;
     <button type="button" id="btnAggiornaFT">Aggiorna tipologie fornitori</button>
   </footer>
 
   <script>
-    const APP_VERSION = "Versione: v 4.0.3 \"RollingDices\"";
+    const APP_VERSION = "Versione: v 4.0.2 \"RollingDices\"";
     const POWER_AUTOMATE_URL = "https://default66e853deece344dd9d66ee6bdf4159.d4.environment.api.powerplatform.com/powerautomate/automations/direct/workflows/465577c70a414425a1f278e3c3f2bb43/triggers/manual/paths/invoke?api-version=1";
 
     const DEBUG_MODE = false;
@@ -525,6 +532,10 @@
     const urlClienti = "https://giuseppeangelici-coder.github.io/outlook-addin-test/QryCustomerMaster.json";
     let fornitoreTipologiaDb = [];
     let fornitoriDb = [];
+    // v4.1.0: nota solo dopo la decrittazione di QryCustomerMaster (portfolioSuperusers),
+    // usata per decidere quale variante del gate FornitoriTipologie mostrare (singolo
+    // file vs multi-region) — vedi applyRowLevelSecurity e Office.onReady.
+    let isPortfolioSuperuser = false;
     let selectedCustomer = null;
     let selectedFornitore = null;
     let selectedTipologia = null;
@@ -815,16 +826,22 @@
     // sia Fornitori sia Tipologie.
     // (rimosso da GitHub Pages: soggetto ad aggiornamenti infra-annuali)
     // ─────────────────────────────────────────────────────────
-    const LS_KEY_FORNITORI_TIPOLOGIE = "fornitoriTipologieData";
+    // v4.1.0: chiave rinominata e struttura cambiata da "singolo blob" a "dizionario
+    // per region" ({ "6716": {...}, "6717": {...} }). Per un utente normale (RV/RSM)
+    // contiene sempre una sola region (la propria); per un portfolio superuser può
+    // contenerne più di una, perché deve poter consultare qualunque region gli serva
+    // senza essere vincolato a un solo file caricato.
+    const LS_KEY_FORNITORI_TIPOLOGIE = "fornitoriTipologieDataByRegion";
 
     function leggiFornitoriTipologieLocali() {
       try {
         const raw = localStorage.getItem(LS_KEY_FORNITORI_TIPOLOGIE);
-        if (!raw) return null;
+        if (!raw) return {};
         const parsed = JSON.parse(raw);
-        return validaStrutturaFornitoriTipologie(parsed) ? parsed : null;
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+        return parsed;
       } catch (e) {
-        return null;
+        return {};
       }
     }
 
@@ -841,13 +858,82 @@
       return tipologieOk && anagraficaOk;
     }
 
-    function salvaFornitoriTipologieLocali(parsed) {
-      localStorage.setItem(LS_KEY_FORNITORI_TIPOLOGIE, JSON.stringify(parsed));
+    // Preferisce la chiave top-level "region" (introdotta con la VBA multi-region);
+    // in sua assenza (file generati con la macro precedente) ripiega sulla Region
+    // già presente per riga in fornitoriAnagrafica, che la validazione garantisce.
+    function estraiRegioneDaFile(parsed) {
+      if (parsed.region) return String(parsed.region).trim();
+      if (parsed.Region) return String(parsed.Region).trim();
+      const primaAnagrafica = Array.isArray(parsed.fornitoriAnagrafica) ? parsed.fornitoriAnagrafica[0] : null;
+      return primaAnagrafica ? String(primaAnagrafica.Region || "").trim() : "";
+    }
+
+    function salvaFornitoriTipologieRegione(regione, parsed) {
+      const tutte = leggiFornitoriTipologieLocali();
+      tutte[regione] = parsed;
+      localStorage.setItem(LS_KEY_FORNITORI_TIPOLOGIE, JSON.stringify(tutte));
+    }
+
+    function rimuoviFornitoriTipologieRegione(regione) {
+      const tutte = leggiFornitoriTipologieLocali();
+      delete tutte[regione];
+      localStorage.setItem(LS_KEY_FORNITORI_TIPOLOGIE, JSON.stringify(tutte));
+    }
+
+    // Unisce tutte le region attualmente in cache in un'unica coppia di array,
+    // così il resto del codice (getFornitoriPerRegioneCliente, getTipologieFiltrate,
+    // ecc.) continua a lavorare su fornitoriDb/fornitoreTipologiaDb senza sapere
+    // se i dati provengono da una o più region caricate.
+    function costruisciDbDaCacheRegioni() {
+      const tutte = leggiFornitoriTipologieLocali();
+      const regioni = Object.keys(tutte);
+      let tipologie = [];
+      let anagrafica = [];
+      regioni.forEach(r => {
+        const dati = tutte[r];
+        if (dati && Array.isArray(dati.fornitoriTipologie)) tipologie = tipologie.concat(dati.fornitoriTipologie);
+        if (dati && Array.isArray(dati.fornitoriAnagrafica)) anagrafica = anagrafica.concat(dati.fornitoriAnagrafica);
+      });
+      return { tipologie, anagrafica, regioni };
+    }
+
+    function renderRegioniCaricate() {
+      const contenitore = document.getElementById("ftGateRegioniCaricate");
+      const btnContinua = document.getElementById("btnContinuaFT");
+      const tutte = leggiFornitoriTipologieLocali();
+      const regioni = Object.keys(tutte);
+
+      if (regioni.length === 0) {
+        contenitore.innerHTML = "<p style='font-size:12px;color:#666;'>Nessun file caricato.</p>";
+        btnContinua.classList.add("ft-gate-hidden");
+        return;
+      }
+
+      contenitore.innerHTML = "<p style='font-size:12px;color:#666;margin-bottom:4px;'>File già caricati:</p>" +
+        regioni.map(r =>
+          `<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:4px 0;border-bottom:1px solid #eee;">
+            <span>Region ${r}</span>
+            <button type="button" class="ft-gate-rimuovi-regione" data-regione="${r}" style="background:none;border:none;color:#a4262c;cursor:pointer;font-size:11px;text-decoration:underline;padding:0;">Rimuovi</button>
+          </div>`
+        ).join("");
+
+      btnContinua.classList.remove("ft-gate-hidden");
+
+      contenitore.querySelectorAll(".ft-gate-rimuovi-regione").forEach(btn => {
+        btn.addEventListener("click", () => {
+          rimuoviFornitoriTipologieRegione(btn.getAttribute("data-regione"));
+          renderRegioniCaricate();
+        });
+      });
     }
 
     function mostraGateFornitoriTipologie() {
       document.getElementById("corpoForm").style.display = "none";
       document.getElementById("selectPercorso").disabled = true;
+      document.getElementById("ftGateMessage").textContent = isPortfolioSuperuser
+        ? "Carica i file FornitoriTipologie.json delle region che ti servono: puoi caricarne più di uno. Restano ricordati finché non li rimuovi."
+        : "Per usare il modulo devi caricare il file FornitoriTipologie.json ricevuto (contiene sia Tipologie sia anagrafica Fornitori). Va fatto una sola volta: da qui in poi il taskpane lo ricorderà automaticamente.";
+      renderRegioniCaricate();
       document.getElementById("gateFornitoriTipologie").classList.remove("ft-gate-hidden");
     }
 
@@ -858,6 +944,7 @@
     function inizializzaGateFornitoriTipologie() {
       const inputFile = document.getElementById("inputFileFornitoriTipologie");
       const btnCarica = document.getElementById("btnCaricaFT");
+      const btnContinua = document.getElementById("btnContinuaFT");
       const errorBox = document.getElementById("ftGateError");
 
       btnCarica.addEventListener("click", () => {
@@ -883,10 +970,30 @@
             errorBox.style.display = "block";
             return;
           }
-          salvaFornitoriTipologieLocali(parsed);
-          // Ricarico il taskpane: approccio volutamente semplice per evitare
-          // reinizializzazioni parziali dello stato del form.
-          window.location.reload();
+          const regione = estraiRegioneDaFile(parsed);
+          if (!regione) {
+            errorBox.textContent = "Impossibile determinare la region dal file caricato: verificare che sia stato generato con la versione aggiornata della macro.";
+            errorBox.style.display = "block";
+            return;
+          }
+          if (!isPortfolioSuperuser) {
+            // Un utente non-portfolio lavora su una sola region: un nuovo upload
+            // sostituisce sempre e solo quella, non si accumula con eventuali
+            // altre già in cache (es. da una sessione precedente con ruolo diverso).
+            localStorage.removeItem(LS_KEY_FORNITORI_TIPOLOGIE);
+          }
+          salvaFornitoriTipologieRegione(regione, parsed);
+          inputFile.value = "";
+
+          if (isPortfolioSuperuser) {
+            // Niente reload per il portfolio: può continuare a caricare altre
+            // region nella stessa sessione di gate, la lista si aggiorna a vista.
+            renderRegioniCaricate();
+          } else {
+            // Approccio volutamente semplice per evitare reinizializzazioni
+            // parziali dello stato del form.
+            window.location.reload();
+          }
         };
         reader.onerror = () => {
           errorBox.textContent = "Errore nella lettura del file. Riprova.";
@@ -895,11 +1002,13 @@
         reader.readAsText(file);
       });
 
+      btnContinua.addEventListener("click", () => {
+        window.location.reload();
+      });
+
       const btnAggiorna = document.getElementById("btnAggiornaFT");
       if (btnAggiorna) {
         btnAggiorna.addEventListener("click", () => {
-          document.getElementById("ftGateMessage").textContent =
-            "Carica la nuova versione del file FornitoriTipologie.json ricevuta dal canale Teams.";
           mostraGateFornitoriTipologie();
         });
       }
@@ -1076,38 +1185,15 @@
       }
 
       inizializzaGateFornitoriTipologie();
-
-      // GATE: FornitoriTipologie non è più pubblicato su GitHub Pages (soggetto ad
-      // aggiornamenti infra-annuali, aprile-luglio). Va caricato una tantum dall'utente
-      // e persiste in localStorage; da qui in poi il taskpane lo rilegge da lì.
-      // Il file locale contiene sia fornitoriTipologie sia fornitoriAnagrafica (ex
-      // Fornitori.json, anch'esso non più fetchato da GitHub Pages: stesso ciclo di
-      // manutenzione delle Tipologie, aggiornati insieme dalla stessa persona).
-      const datiLocaliFT = leggiFornitoriTipologieLocali();
-      if (!datiLocaliFT) {
-        mostraGateFornitoriTipologie();
-        return;
-      }
-      fornitoriDb = datiLocaliFT.fornitoriAnagrafica;
-      // Punto 12: la Tipologia "EXTRA - ON TOP da accordi con RV" non è più
-      // codificata nel file (nessuna eccezione emailRV prevista, per definizione
-      // ogni fornitore attivo la ammette). Viene sintetizzata a runtime, una riga
-      // per ogni fornitore presente in fornitoriDb, così da eliminare sia il rischio
-      // di dimenticanza in fase di manutenzione del file sia i duplicati nel caso
-      // in cui la riga fosse ancora presente nel JSON durante la migrazione.
-      fornitoreTipologiaDb = datiLocaliFT.fornitoriTipologie
-        .filter(item => String(item.TipologiaIntervento || "").trim().toLowerCase() !== TIPOLOGIA_EXTRA_ON_TOP)
-        .concat(
-          fornitoriDb.map(f => ({
-            CodFornitore: f.CodFornitore,
-            Region: f.Region,
-            TipologiaIntervento: "EXTRA - ON TOP da accordi con RV",
-            emailRV: ""
-          }))
-        );
-
       inizializzaGatePassphrase();
 
+      // v4.1.0: la passphrase (e quindi la decrittazione di QryCustomerMaster) ora
+      // viene prima del gate FornitoriTipologie. Motivo: per decidere quale variante
+      // del gate FT mostrare (singolo file per un RV/RSM, multi-region per un
+      // portfolio superuser) serve prima sapere isPortfolioSuperuser, che si ottiene
+      // solo leggendo portfolioSuperusers da dentro QryCustomerMaster — quindi il
+      // dato cifrato va sbloccato per primo.
+      //
       // GATE: QryCustomerMaster è pubblicato cifrato (AES-256-GCM, v3.2.0). Serve una
       // chiave di decrittazione: se non è già persistita da uno sblocco precedente,
       // si richiede la passphrase all'utente (una tantum, poi ricordata in locale).
@@ -1122,6 +1208,10 @@
       // con un'azione Compose che avvolge clienti + superuser nello stesso oggetto.
       // emailRSM.json eliminato (v3.2.0): l'elenco RSM è calcolato a runtime da
       // fullDatabase dentro applyRowLevelSecurity, vedi commento lì.
+      //
+      // Il gate FornitoriTipologie (lettura/merge della cache multi-region) è stato
+      // spostato più avanti, subito dopo applyRowLevelSecurity: è lì che diventa
+      // noto isPortfolioSuperuser, necessario per scegliere la variante del gate.
 
       function clearTipologiaSelection() {
         inputTipologia.value = "";
@@ -1254,6 +1344,7 @@
         // arriva ora dalla tabella reale emailPORTFOLIO (confluita nel payload di
         // QryCustomerMaster) ed è l'unica fonte per i superuser globali.
         const superUsersGlobal = portfolioList.map(u => (u.email || "").toLowerCase().trim());
+        isPortfolioSuperuser = superUsersGlobal.includes(cleanEmail);
         // emailRSM.json eliminato (v3.2.0): l'elenco RSM è dato derivato, già presente
         // come join dentro QryCustomerMaster. Basta l'insieme distinto dei valori di
         // emailResponsabileCommerciale già fetchati in fullDatabase, si auto-aggiorna
@@ -2017,6 +2108,23 @@
 
         log("Database e file permessi caricati.");
         applyRowLevelSecurity(userEmail, portfolioDb);
+
+        // GATE: FornitoriTipologie non è più pubblicato su GitHub Pages (soggetto ad
+        // aggiornamenti infra-annuali, aprile-luglio). Va caricato una tantum dall'utente
+        // e persiste in localStorage, in cache per region; da qui in poi il taskpane la
+        // rilegge da lì. Ogni file locale contiene sia fornitoriTipologie sia
+        // fornitoriAnagrafica (ex Fornitori.json), aggiornati insieme dalla stessa persona.
+        // Spostato qui (dopo la decrittazione): isPortfolioSuperuser è ora noto, quindi
+        // mostraGateFornitoriTipologie() può già scegliere il messaggio/comportamento
+        // corretto (singolo file vs multi-region) fin dal primo rendering del gate.
+        const datiUniti = costruisciDbDaCacheRegioni();
+        if (datiUniti.regioni.length === 0) {
+          mostraGateFornitoriTipologie();
+          return;
+        }
+        fornitoreTipologiaDb = datiUniti.tipologie;
+        fornitoriDb = datiUniti.anagrafica;
+
         setupGestioneValidita();
         setupLogicaEconomica();
         setupGestionePercorso();
