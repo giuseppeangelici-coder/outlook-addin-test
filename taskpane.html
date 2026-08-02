@@ -1,17 +1,12 @@
 <!-- 
   ADD-IN RICHIESTE RV - TASKPANE COMPONENT
-  Version: 4.0.2 "Rolling Dices"
+  Version: 4.0.3 "Rolling Dices"
   Date: 2026-08-01
   Changes:
-    - Punto 11 (fix): percorso "Investimento coperto da fornitore", modalità solo
-      compilazione (mode !== "attach", niente email allegata). Il menu di ricerca
-      Fornitori mostrava tutti i fornitori della region, incluso chi ha SOLO la
-      Tipologia "EXTRA - ON TOP da accordi con RV" (che richiede l'allegato email e
-      quindi in questa modalità non è mai selezionabile, vedi getTipologieFiltrate).
-      Ora il menu Fornitori, in modalità solo compilazione, propone solo i fornitori
-      che hanno almeno una Tipologia diversa da EXTRA, cioè con reintegri noti.
-      In modalità "attach" nessuna modifica: restano visibili tutti i fornitori della
-      region, perché lì l'EXTRA è ammesso.
+    - Il menu Fornitori, in modalità solo compilazione, propone solo i fornitori
+      che hanno almeno una Tipologia, cioè con reintegri noti.
+      In modalità "attach" restano visibili tutti i fornitori della
+      region e la tipologie EXTRA viene generata a runtime per tutti i fornitori esistente in fornitoritipologie.json
   Changelog precedente:
     - v 4.0.2 "RollingDices" (2026-07-31):
       - Punto 10: Tipologia "EXTRA - ON TOP da accordi con RV" visibile solo quando il
@@ -436,13 +431,13 @@
   <div id="log">Log eventi...</div>
 
   <footer class="app-footer">
-    <span>Versione: v 4.0.2 "RollingDices"</span>
+    <span>Versione: v 4.0.3 "RollingDices"</span>
     &middot;
     <button type="button" id="btnAggiornaFT">Aggiorna tipologie fornitori</button>
   </footer>
 
   <script>
-    const APP_VERSION = "Versione: v 4.0.2 \"RollingDices\"";
+    const APP_VERSION = "Versione: v 4.0.3 \"RollingDices\"";
     const POWER_AUTOMATE_URL = "https://default66e853deece344dd9d66ee6bdf4159.d4.environment.api.powerplatform.com/powerautomate/automations/direct/workflows/465577c70a414425a1f278e3c3f2bb43/triggers/manual/paths/invoke?api-version=1";
 
     const DEBUG_MODE = false;
@@ -1093,8 +1088,23 @@
         mostraGateFornitoriTipologie();
         return;
       }
-      fornitoreTipologiaDb = datiLocaliFT.fornitoriTipologie;
       fornitoriDb = datiLocaliFT.fornitoriAnagrafica;
+      // Punto 12: la Tipologia "EXTRA - ON TOP da accordi con RV" non è più
+      // codificata nel file (nessuna eccezione emailRV prevista, per definizione
+      // ogni fornitore attivo la ammette). Viene sintetizzata a runtime, una riga
+      // per ogni fornitore presente in fornitoriDb, così da eliminare sia il rischio
+      // di dimenticanza in fase di manutenzione del file sia i duplicati nel caso
+      // in cui la riga fosse ancora presente nel JSON durante la migrazione.
+      fornitoreTipologiaDb = datiLocaliFT.fornitoriTipologie
+        .filter(item => String(item.TipologiaIntervento || "").trim().toLowerCase() !== TIPOLOGIA_EXTRA_ON_TOP)
+        .concat(
+          fornitoriDb.map(f => ({
+            CodFornitore: f.CodFornitore,
+            Region: f.Region,
+            TipologiaIntervento: "EXTRA - ON TOP da accordi con RV",
+            emailRV: ""
+          }))
+        );
 
       inizializzaGatePassphrase();
 
