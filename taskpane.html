@@ -1,9 +1,29 @@
 <!-- 
   ADD-IN RICHIESTE RV - TASKPANE COMPONENT
-  Version: 4.0.2 "Rolling Dices"
-  Date: 2026-08-01
+  Version: 4.0.3 "Rolling Dices"
+  Date: 2026-08-05
   Changes:
-    - Punto 11 (fix): percorso "Investimento coperto da fornitore", modalità solo
+    - Ruolo "Super RV" (e.lombardi@partesa.it, fuori dallo schema RLS ereditato da
+      QryCustomerMaster/PBI, gestito qui a livello di codice): aggiunta costante
+      SUPER_RV_SUBORDINATES (mappa superRv -> [RV sottoposti]) e helper
+      getSuperRvPerRv(rvEmail). In applyRowLevelSecurity, nuovo ramo che concede
+      accesso al Super RV filtrando i clienti dei suoi RV sottoposti (stesso
+      principio del ramo RSM/RV, ma la chiave è dentro SUPER_RV_SUBORDINATES
+      anziché derivata da fullDatabase). In buildRecipients, nuovo parametro
+      rvEmail (email RV del cliente selezionato, non di chi compila il modulo):
+      quando esiste già un destinatario RSM (percorso standard e fuori binario,
+      non Merce Omaggio) e l'RV del cliente è un sottoposto di un Super RV, questo
+      viene aggiunto ai toRecipients "al pari dell'RSM". Basandosi sull'RV del
+      cliente e non su chi compila, la stessa logica copre sia il caso in cui è un
+      RV sottoposto a compilare, sia il caso in cui è il Super RV stesso a
+      compilare per conto di un cliente dei suoi sottoposti (i destinatari
+      risultano identici a quelli che avrebbe prodotto il RV titolare).
+      estraiDatiClienteCorrente estende l'oggetto restituito con cEmailRv; i due
+      call-site di buildRecipients che includono l'RSM (standard, fuori binario)
+      ora passano anche rvEmail. Nessuna modifica al percorso Merce Omaggio (non
+      ha mai avuto un destinatario RSM, quindi la regola non si applica lì).
+  Changelog precedente:
+    - v4.0.2 (2026-08-01): Punto 11 (fix): percorso "Investimento coperto da fornitore", modalità solo
       compilazione (mode !== "attach", niente email allegata). Il menu di ricerca
       Fornitori mostrava tutti i fornitori della region, incluso chi ha SOLO la
       Tipologia "EXTRA - ON TOP da accordi con RV" (che richiede l'allegato email e
@@ -526,6 +546,26 @@
       "6760": "clienti.nordovest@partesa.it"
     };
 
+    // "Super RV": ruolo intermedio fuori dallo schema RLS ereditato da QryCustomerMaster/PBI
+    // (non è né RSM né RV in anagrafica). Vede in add-in i clienti dei RV a lui assegnati
+    // (gestito in applyRowLevelSecurity) e, nelle comunicazioni, va considerato "al pari
+    // dell'RSM" per quei clienti: aggiunto ai destinatari ovunque compaia già l'RSM.
+    // La chiave è l'RV del cliente selezionato (non chi compila il modulo): questo copre
+    // sia il caso "compila un suo RV" sia il caso "compila lui stesso per un cliente di un
+    // suo RV", che devono comportarsi allo stesso modo lato destinatari.
+    const SUPER_RV_SUBORDINATES = {
+      "e.lombardi@partesa.it": ["r.soriente@partesa.it", "m.meazza@partesa.it"]
+    };
+
+    function getSuperRvPerRv(rvEmail) {
+      const cleanRv = String(rvEmail || "").trim().toLowerCase();
+      if (!cleanRv) return null;
+      for (const [superRv, subordinati] of Object.entries(SUPER_RV_SUBORDINATES)) {
+        if (subordinati.includes(cleanRv)) return superRv;
+      }
+      return null;
+    }
+
     let fullDatabase = [];
     let filteredDatabase = [];
     let chiaveDecrittazione = null; // CryptoKey per AES-GCM, importata da localStorage o derivata dalla passphrase
@@ -737,7 +777,7 @@
       return String(region || "").trim();
     }
 
-    function buildRecipients({ region, currentUserEmail, rsmEmail, percorso, modalitaFatturazione }) {
+    function buildRecipients({ region, currentUserEmail, rsmEmail, rvEmail, percorso, modalitaFatturazione }) {
       const effectiveRegion = resolveRecipientRegion(region, currentUserEmail);
 
       if (percorso === PERCORSO_RICHIESTA.merceOmaggio) {
@@ -750,12 +790,21 @@
         };
       }
 
+      // Super RV (es. e.lombardi@partesa.it): quando il cliente appartiene a uno dei suoi
+      // RV sottoposti, va aggiunto ai destinatari "al pari dell'RSM" ovunque l'RSM compaia
+      // già come destinatario. Si basa sull'RV del cliente (rvEmail), non su chi compila il
+      // modulo, quindi copre sia il caso in cui compila il RV sottoposto sia il caso in cui
+      // compila direttamente il Super RV per conto di un suo cliente.
+      const superRvEmail = rsmEmail ? getSuperRvPerRv(rvEmail) : null;
+
       const portfolioCc = PORTFOLIO_CC_RECIPIENTS[effectiveRegion] || [];
 
       if (percorso === PERCORSO_RICHIESTA.fuoriBinarioSenzaReintegro) {
         const ccSet = new Set([...FINANCE_CC_RECIPIENTS, ...portfolioCc]);
+        const toRecipients = rsmEmail ? [rsmEmail] : [];
+        if (superRvEmail && !toRecipients.includes(superRvEmail)) toRecipients.push(superRvEmail);
         return {
-          toRecipients: rsmEmail ? [rsmEmail] : [],
+          toRecipients,
           ccRecipients: [...ccSet],
           effectiveRegion,
           serviceRecipient: ""
@@ -771,8 +820,11 @@
         ccRecipients.add("contratti.clienti@partesa.it");
       }
 
+      const toRecipients = rsmEmail ? [rsmEmail] : [];
+      if (superRvEmail && !toRecipients.includes(superRvEmail)) toRecipients.push(superRvEmail);
+
       return {
-        toRecipients: rsmEmail ? [rsmEmail] : [],
+        toRecipients,
         ccRecipients: [...ccRecipients],
         effectiveRegion,
         serviceRecipient: ""
@@ -1368,6 +1420,15 @@
             (c.emailResponsabileVendite || c.EmailResponsabileVendite || "").toLowerCase().trim() === cleanEmail
           );
           log(`Accesso concesso come RV. Righe filtrate: ${filteredDatabase.length}`);
+        } else if (SUPER_RV_SUBORDINATES[cleanEmail]) {
+          // Ruolo "Super RV" (es. e.lombardi@partesa.it): non è né RSM né RV in
+          // QryCustomerMaster, ma vede i clienti dei RV a lui assegnati. Eccezione
+          // fuori dallo schema RLS ereditato da PBI, gestita qui a livello di codice.
+          const rvSottoposti = SUPER_RV_SUBORDINATES[cleanEmail];
+          filteredDatabase = fullDatabase.filter(c =>
+            rvSottoposti.includes((c.emailResponsabileVendite || c.EmailResponsabileVendite || "").toLowerCase().trim())
+          );
+          log(`Accesso concesso come Super RV. Righe filtrate: ${filteredDatabase.length}`);
         } else {
           filteredDatabase = [];
           log("ATTENZIONE: Utente non autorizzato o non presente nelle anagrafiche. Accesso negato.");
@@ -2203,6 +2264,11 @@
             selectedCustomer.EmailResponsabileCommerciale ||
             ""
           ).trim().toLowerCase(),
+          cEmailRv: (
+            selectedCustomer.emailResponsabileVendite ||
+            selectedCustomer.EmailResponsabileVendite ||
+            ""
+          ).trim().toLowerCase(),
           cVen: selectedCustomer.venditore || selectedCustomer.Venditore || "N/D",
           gruppoScelto: gruppoCliente.value,
           fornitoreScelto: selectedFornitore ? selectedFornitore.RagSocFornitore : "Non specificato"
@@ -2251,6 +2317,7 @@
             cRag: cRagF,
             cBu: cBuF,
             cEmailRsm: cEmailRsmF,
+            cEmailRv: cEmailRvF,
             cVen: cVenF,
             gruppoScelto: gruppoSceltF,
             fornitoreScelto: fornitoreSceltF
@@ -2262,6 +2329,7 @@
             region: cBuF,
             currentUserEmail: userEmail,
             rsmEmail: cEmailRsmF,
+            rvEmail: cEmailRvF,
             percorso: percorsoSelezionato
           });
 
@@ -2493,6 +2561,7 @@
           cRag,
           cBu,
           cEmailRsm,
+          cEmailRv,
           cVen,
           gruppoScelto,
           fornitoreScelto
@@ -2502,6 +2571,7 @@
           region: cBu,
           currentUserEmail: userEmail,
           rsmEmail: cEmailRsm,
+          rvEmail: cEmailRv,
           percorso: percorsoSelezionato,
           modalitaFatturazione: modalitaFatt
         });
