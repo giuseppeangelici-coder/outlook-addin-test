@@ -936,18 +936,35 @@
     // così il resto del codice (getFornitoriPerRegioneCliente, getTipologieFiltrate,
     // ecc.) continua a lavorare su fornitoriDb/fornitoreTipologiaDb senza sapere
     // se i dati provengono da una o più region caricate.
-    function costruisciDbDaCacheRegioni() {
-      const tutte = leggiFornitoriTipologieLocali();
-      const regioni = Object.keys(tutte);
-      let tipologie = [];
-      let anagrafica = [];
-      regioni.forEach(r => {
-        const dati = tutte[r];
-        if (dati && Array.isArray(dati.fornitoriTipologie)) tipologie = tipologie.concat(dati.fornitoriTipologie);
-        if (dati && Array.isArray(dati.fornitoriAnagrafica)) anagrafica = anagrafica.concat(dati.fornitoriAnagrafica);
-      });
-      return { tipologie, anagrafica, regioni };
-    }
+function costruisciDbDaCacheRegioni() {
+  const tutte = leggiFornitoriTipologieLocali();
+  const regioni = Object.keys(tutte);
+  let tipologie = [];
+  let anagrafica = [];
+  regioni.forEach(r => {
+    const dati = tutte[r];
+    if (dati && Array.isArray(dati.fornitoriTipologie)) tipologie = tipologie.concat(dati.fornitoriTipologie);
+    if (dati && Array.isArray(dati.fornitoriAnagrafica)) anagrafica = anagrafica.concat(dati.fornitoriAnagrafica);
+  });
+
+  // Punto 12: la Tipologia "EXTRA - ON TOP da accordi con RV" non è codificata nel
+  // file (nessuna eccezione emailRV prevista, per definizione ogni fornitore attivo
+  // la ammette). Sintetizzata a runtime, una riga per ogni fornitore in anagrafica
+  // (già unita su tutte le region in cache), dopo aver scartato eventuali righe EXTRA
+  // residue ancora presenti nel file per retrocompatibilità in fase di transizione.
+  tipologie = tipologie
+    .filter(item => String(item.TipologiaIntervento || "").trim().toLowerCase() !== TIPOLOGIA_EXTRA_ON_TOP)
+    .concat(
+      anagrafica.map(f => ({
+        CodFornitore: f.CodFornitore,
+        Region: f.Region,
+        TipologiaIntervento: "EXTRA - ON TOP da accordi con RV",
+        emailRV: ""
+      }))
+    );
+
+  return { tipologie, anagrafica, regioni };
+}
 
     function renderRegioniCaricate() {
       const contenitore = document.getElementById("ftGateRegioniCaricate");
